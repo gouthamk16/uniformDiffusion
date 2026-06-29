@@ -1,0 +1,3046 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decoder Visualizer</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --txt:#e6edf3; --muted:#8b949e;
+          --type:#79c0ff; --cfg:#a5d6ff; --name:#d2a8ff; --hit:#9e6a03; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;
+         background:var(--bg); color:var(--txt); }
+  header { position:sticky; top:0; background:var(--panel); border-bottom:1px solid var(--line);
+           padding:12px 16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; z-index:1; }
+  header h1 { font-size:15px; margin:0 12px 0 0; }
+  input[type=search] { background:var(--bg); border:1px solid var(--line); color:var(--txt);
+           padding:6px 10px; border-radius:6px; min-width:220px; }
+  button, label.btn { background:var(--bg); border:1px solid var(--line); color:var(--txt);
+           padding:6px 10px; border-radius:6px; cursor:pointer; }
+  button:hover, label.btn:hover { border-color:var(--type); }
+  #tree { padding:16px; }
+  .node { margin-left:18px; border-left:1px dotted var(--line); padding-left:10px; }
+  .row { display:flex; align-items:baseline; gap:6px; padding:1px 0; cursor:default; }
+  .row.clickable { cursor:pointer; }
+  .tog { width:14px; color:var(--muted); user-select:none; }
+  .name { color:var(--name); }
+  .type { color:var(--type); }
+  .cfg { color:var(--cfg); }
+  .muted { color:var(--muted); }
+  .hit { background:var(--hit); border-radius:3px; padding:0 3px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Decoder Visualizer</h1>
+  <input id="q" type="search" placeholder="filter by name / type / config…">
+  <button id="expand">Expand all</button>
+  <button id="collapse">Collapse all</button>
+  <label class="btn">Load JSON<input id="file" type="file" accept=".json" hidden></label>
+  <span id="stats" class="muted"></span>
+</header>
+<div id="tree"></div>
+
+<script id="data" type="application/json">
+{
+  "type": "DiffusionGemmaDecoderModel",
+  "children": {
+    "embed_tokens": {
+      "type": "DiffusionGemmaTextScaledWordEmbedding",
+      "config": "262144, 2816, padding_idx=0"
+    },
+    "layers": {
+      "type": "ModuleList",
+      "children": {
+        "0": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "1": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "2": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "3": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "4": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "5": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=8192, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=1024, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=8192, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "6": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "7": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "8": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "9": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "10": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "11": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=8192, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=1024, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=8192, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "12": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "13": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "14": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "15": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "16": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "17": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=8192, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=1024, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=8192, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "18": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "19": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "20": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "21": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "22": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "23": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=8192, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=1024, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=8192, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "24": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "25": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "26": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "27": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "28": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=4096, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "v_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2048, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=4096, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        },
+        "29": {
+          "type": "DiffusionGemmaDecoderTextLayer",
+          "children": {
+            "self_attn": {
+              "type": "DiffusionGemmaDecoderTextAttention",
+              "children": {
+                "q_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=8192, bias=False"
+                },
+                "k_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=1024, bias=False"
+                },
+                "o_proj": {
+                  "type": "Linear",
+                  "config": "in_features=8192, out_features=2816, bias=False"
+                },
+                "q_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "k_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "v_norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                }
+              }
+            },
+            "mlp": {
+              "type": "DiffusionGemmaText4MLP",
+              "children": {
+                "gate_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "up_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=2112, bias=False"
+                },
+                "down_proj": {
+                  "type": "Linear",
+                  "config": "in_features=2112, out_features=2816, bias=False"
+                },
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "input_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_attention_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "router": {
+              "type": "DiffusionGemmaTextRouter",
+              "children": {
+                "norm": {
+                  "type": "DiffusionGemmaRMSNorm"
+                },
+                "proj": {
+                  "type": "Linear",
+                  "config": "in_features=2816, out_features=128, bias=False"
+                }
+              }
+            },
+            "experts": {
+              "type": "DiffusionGemmaTextExperts",
+              "children": {
+                "act_fn": {
+                  "type": "GELUTanh"
+                }
+              }
+            },
+            "post_feedforward_layernorm_1": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "post_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            },
+            "pre_feedforward_layernorm_2": {
+              "type": "DiffusionGemmaRMSNorm"
+            }
+          }
+        }
+      }
+    },
+    "norm": {
+      "type": "DiffusionGemmaRMSNorm"
+    },
+    "rotary_emb": {
+      "type": "DiffusionGemmaTextRotaryEmbedding"
+    },
+    "self_conditioning": {
+      "type": "DiffusionGemmaSelfConditioning",
+      "children": {
+        "pre_norm": {
+          "type": "DiffusionGemmaRMSNorm"
+        },
+        "post_norm": {
+          "type": "DiffusionGemmaRMSNorm"
+        },
+        "gate_proj": {
+          "type": "Linear",
+          "config": "in_features=2816, out_features=2112, bias=False"
+        },
+        "up_proj": {
+          "type": "Linear",
+          "config": "in_features=2816, out_features=2112, bias=False"
+        },
+        "down_proj": {
+          "type": "Linear",
+          "config": "in_features=2112, out_features=2816, bias=False"
+        },
+        "act_fn": {
+          "type": "GELUTanh"
+        }
+      }
+    }
+  }
+}
+</script>
+<script>
+const treeEl = document.getElementById("tree");
+let leafCount = 0, moduleCount = 0;
+
+function render(name, node, depth) {
+  moduleCount++;
+  const wrap = document.createElement("div");
+  wrap.className = "node";
+
+  const row = document.createElement("div");
+  row.className = "row";
+  const kids = node.children ? Object.entries(node.children) : [];
+  if (!kids.length) leafCount++;
+
+  const tog = document.createElement("span");
+  tog.className = "tog";
+  row.appendChild(tog);
+
+  const label = document.createElement("span");
+  let html = "";
+  if (name !== null) html += `<span class="name">${name}</span><span class="muted">:</span> `;
+  html += `<span class="type">${node.type}</span>`;
+  if (node.config) html += ` <span class="cfg">(${node.config})</span>`;
+  if (kids.length) html += ` <span class="muted">{${kids.length}}</span>`;
+  label.innerHTML = html;
+  row.appendChild(label);
+  wrap.appendChild(row);
+
+  if (kids.length) {
+    row.classList.add("clickable");
+    const childBox = document.createElement("div");
+    const collapsed = depth >= 2;
+    tog.textContent = collapsed ? "▶" : "▼";
+    if (collapsed) childBox.classList.add("hidden");
+    row.onclick = () => {
+      const hid = childBox.classList.toggle("hidden");
+      tog.textContent = hid ? "▶" : "▼";
+    };
+    for (const [cName, cNode] of kids) childBox.appendChild(render(cName, cNode, depth + 1));
+    wrap.appendChild(childBox);
+  }
+  return wrap;
+}
+
+function load(data) {
+  treeEl.innerHTML = "";
+  leafCount = 0; moduleCount = 0;
+  treeEl.appendChild(render(null, data, 0));
+  document.getElementById("stats").textContent = `${moduleCount} modules · ${leafCount} leaves`;
+}
+
+function setOpen(open) {
+  document.querySelectorAll(".node > div:not(.row)").forEach(b => b.classList.toggle("hidden", !open));
+  document.querySelectorAll(".tog").forEach(t => { if (t.textContent) t.textContent = open ? "▼" : "▶"; });
+}
+
+function filter(term) {
+  term = term.trim().toLowerCase();
+  document.querySelectorAll(".node").forEach(n => n.classList.remove("hidden"));
+  document.querySelectorAll(".hit").forEach(h => h.classList.remove("hit"));
+  if (!term) return;
+  const nodes = [...document.querySelectorAll("#tree .node")];
+  const match = n => n.querySelector(":scope > .row").textContent.toLowerCase().includes(term);
+  nodes.forEach(n => { if (match(n)) {
+    n.querySelector(":scope > .row > span:nth-child(2)").classList.add("hit");
+    let p = n; while (p && p.classList.contains("node")) {
+      p.classList.remove("hidden");
+      const box = p.parentElement;
+      if (box && box.classList.contains("hidden")) box.classList.remove("hidden");
+      p = p.parentElement.closest(".node");
+    }
+  }});
+  nodes.forEach(n => {
+    if (n.classList.contains("hidden")) return;
+    const self = match(n);
+    const childHit = n.querySelector(".node .hit, :scope > .row .hit");
+    if (!self && !childHit) n.classList.add("hidden");
+  });
+}
+
+document.getElementById("expand").onclick = () => setOpen(true);
+document.getElementById("collapse").onclick = () => setOpen(false);
+document.getElementById("q").oninput = e => filter(e.target.value);
+document.getElementById("file").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { try { load(JSON.parse(r.result)); } catch (err) { alert("Bad JSON: " + err.message); } };
+  r.readAsText(f);
+};
+
+load(JSON.parse(document.getElementById("data").textContent));
+</script>
+</body>
+</html>
