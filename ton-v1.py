@@ -243,7 +243,7 @@ class BLM(nn.Module):
 t0 = time.perf_counter()
 model = BLM().to(device)
 n_params = sum(p.numel() for p in model.parameters())
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+optimizer = torch.optim.Adam(model.parameters(), lr=lr, fused=True)
 lossi = []
 stamp(f"model built ({n_params/1e6:.1f}M params)", t0)
 
