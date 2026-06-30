@@ -250,6 +250,11 @@ stamp(f"model built ({n_params/1e6:.1f}M params)", t0)
 
 @torch.no_grad()
 def estimate_loss():
+    # fixed-seed eval: identical (batch, t, corruption) draws every call, so val
+    # depends only on weights and is comparable across runs. RNG state restored after.
+    cpu_state = torch.get_rng_state()
+    cuda_state = torch.cuda.get_rng_state() if device == 'cuda' else None
+    torch.manual_seed(1234)
     out = {}
     model.eval()
     for split in ['train', 'val']:
@@ -260,6 +265,9 @@ def estimate_loss():
             losses[k] = dwdse_loss(model, x0, t).item()
         out[split] = losses.mean()
     model.train()
+    torch.set_rng_state(cpu_state)
+    if cuda_state is not None:
+        torch.cuda.set_rng_state(cuda_state)
     return out
 
 
