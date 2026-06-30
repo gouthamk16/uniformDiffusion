@@ -208,14 +208,14 @@ class Block(nn.Module):
         self.ffwd = FeedForward(n_embed)
         self.ln1 = nn.LayerNorm(n_embed, elementwise_affine=False)
         self.ln2 = nn.LayerNorm(n_embed, elementwise_affine=False)
-        self.adaLN = nn.Linear(n_embed, 6 * n_embed)  # DiT-style time modulation
+        self.adaLN = nn.Linear(n_embed, 4 * n_embed)  # DiT-style time modulation (scale+shift)
         nn.init.zeros_(self.adaLN.weight)
         nn.init.zeros_(self.adaLN.bias)
 
     def forward(self, x, temb):
-        s1, c1, g1, s2, c2, g2 = self.adaLN(F.silu(temb))[:, None, :].chunk(6, dim=-1)
-        x = x + g1 * self.sa(self.ln1(x) * (1 + c1) + s1)
-        x = x + g2 * self.ffwd(self.ln2(x) * (1 + c2) + s2)
+        s1, c1, s2, c2 = self.adaLN(F.silu(temb))[:, None, :].chunk(4, dim=-1)
+        x = x + self.sa(self.ln1(x) * (1 + c1) + s1)
+        x = x + self.ffwd(self.ln2(x) * (1 + c2) + s2)
         return x
 
 
