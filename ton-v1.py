@@ -328,7 +328,8 @@ for epoch in range(start_epoch, epochs):
 
     sync(); t_a = time.perf_counter()
     x0 = get_batch('train')
-    t = torch.rand(x0.shape[0], device=device)
+    B = x0.shape[0]
+    t = (torch.arange(B, device=device) + torch.rand(B, device=device)) / B  # stratified
     sync(); t_b = time.perf_counter()
 
     loss = dwdse_loss(model, x0, t)
