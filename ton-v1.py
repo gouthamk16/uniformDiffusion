@@ -206,12 +206,16 @@ class Block(nn.Module):
         super().__init__()
         self.sa = MultiHeadAttention(num_heads)
         self.ffwd = FeedForward(n_embed)
-        self.ln1 = nn.LayerNorm(n_embed)
-        self.ln2 = nn.LayerNorm(n_embed)
+        self.ln1 = nn.LayerNorm(n_embed, elementwise_affine=False)
+        self.ln2 = nn.LayerNorm(n_embed, elementwise_affine=False)
+        self.adaLN = nn.Linear(n_embed, 6 * n_embed)  # DiT-style time modulation
+        nn.init.zeros_(self.adaLN.weight)
+        nn.init.zeros_(self.adaLN.bias)
 
-    def forward(self, x):
-        x = x + self.sa(self.ln1(x))
-        x = x + self.ffwd(self.ln2(x))
+    def forward(self, x, temb):
+        s1, c1, g1, s2, c2, g2 = self.adaLN(F.silu(temb))[:, None, :].chunk(6, dim=-1)
+        x = x + g1 * self.sa(self.ln1(x) * (1 + c1) + s1)
+        x = x + g2 * self.ffwd(self.ln2(x) * (1 + c2) + s2)
         return x
 
 
@@ -221,7 +225,7 @@ class BLM(nn.Module):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
         self.positional_embedding_table = nn.Embedding(block_size, n_embed)
-        self.blocks = nn.Sequential(*[Block(n_embed, num_heads=n_heads) for _ in range(n_layers)])
+        self.blocks = nn.ModuleList([Block(n_embed, num_heads=n_heads) for _ in range(n_layers)])
         self.ln = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size)
         self.time_mlp = nn.Sequential(
@@ -233,9 +237,10 @@ class BLM(nn.Module):
     def forward(self, idx, t):
         token_embeddings = self.token_embedding_table(idx)
         position_embeddings = self.positional_embedding_table(torch.arange(idx.shape[1], device=device))
-        time_embeddings = self.time_mlp(timestep_embedding(t, n_embed))
-        x = token_embeddings + position_embeddings + time_embeddings[:, None, :]
-        x = self.blocks(x)
+        temb = self.time_mlp(timestep_embedding(t, n_embed))
+        x = token_embeddings + position_embeddings
+        for block in self.blocks:
+            x = block(x, temb)
         x = self.ln(x)
         return self.lm_head(x)  # log of ratios s_theta, (B, T, vocab_size)
 
