@@ -3,3 +3,5 @@
 .vscode/
 .claude/
 .env
+run.log
+results.tsv

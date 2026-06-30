@@ -83,13 +83,12 @@ n_heads = 8
 drop_rate = 0.2
 epochs = 20000
 eval_interval = 1000
-checkpoint_interval = 1000
 eval_iters = 100
 lr = 3e-4           
 min_lr = 3e-5        
 warmup_steps = 300
 gen_steps = 128
-CKPT = 'ckpt.pt'
+train_budget_s = 300  # fixed wall-clock training budget per run
 
 
 def lr_at(step):
@@ -276,18 +275,6 @@ def estimate_loss():
 
 
 start_epoch = 0
-if os.path.exists(CKPT):
-    ck = torch.load(CKPT, map_location=device)
-    model.load_state_dict(ck['model'])
-    optimizer.load_state_dict(ck['opt'])
-    start_epoch = ck['epoch'] + 1
-    lossi = ck['lossi']
-    print(f"resumed from {CKPT} at epoch {start_epoch}")
-
-
-def save_ckpt(epoch):
-    torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(),
-                'epoch': epoch, 'lossi': lossi}, CKPT)
 
 
 # training loop
@@ -296,6 +283,9 @@ timers = {'data': 0.0, 'loss': 0.0, 'backward': 0.0, 'step': 0.0}
 n_timed = 0
 
 for epoch in range(start_epoch, epochs):
+
+    if time.perf_counter() - train_start > train_budget_s:
+        break
 
     cur_lr = lr_at(epoch)
     for g in optimizer.param_groups:
@@ -342,13 +332,14 @@ for epoch in range(start_epoch, epochs):
     timers['step'] += t_e - t_d
     n_timed += 1
 
-    if epoch % checkpoint_interval == 0 and epoch > start_epoch:
-        tc = time.perf_counter()
-        save_ckpt(epoch)
-        stamp(f"checkpoint @ epoch {epoch}", tc)
-
-save_ckpt(epochs - 1)
 stamp("training done", train_start)
+
+# final eval at end of budget so the last logged val reflects end-of-training
+losses = estimate_loss()
+lossi.append(losses['val'])
+mem = f" | gpu {torch.cuda.max_memory_allocated()/1e9:.2f}GB" if device == 'cuda' else ""
+print(f"Step {epoch}/{epochs} : train {losses['train']:.4f} | val {losses['val']:.4f} "
+      f"| lr {lr_at(epoch):.2e} | eval --{mem}")
 
 # Generate samples
 tg = time.perf_counter()
