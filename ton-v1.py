@@ -88,7 +88,7 @@ eval_interval = 1000
 eval_iters = 40
 lr = 1e-3
 min_lr = 3e-5
-warmup_steps = 300
+warmup_steps = 100
 gen_steps = 128
 train_budget_s = 300  # fixed wall-clock training budget per run
 
