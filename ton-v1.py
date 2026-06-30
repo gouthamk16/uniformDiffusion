@@ -162,7 +162,8 @@ class MultiHeadAttention(nn.Module):
         q = q.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
         k = k.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
         v = v.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
-        out = F.scaled_dot_product_attention(q, k, v, dropout_p=drop_rate if self.training else 0.0)
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=drop_rate if self.training else 0.0,
+                                             scale=n_embed ** -0.5)
         out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.dropout(self.proj(out))
 
