@@ -146,6 +146,13 @@ def dwdse_loss(model, x0, t):
     return (dlam[:, None] * term.sum(-1)).mean()
 
 
+def timestep_embedding(t, dim, max_period=10000):
+    half = dim // 2
+    freqs = torch.exp(-math.log(max_period) * torch.arange(half, device=t.device) / half)
+    args = (t * 1000)[:, None] * freqs[None]
+    return torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
+
+
 # Attention block: fused QKV + scaled_dot_product_attention (bidirectional)
 class MultiHeadAttention(nn.Module):
 
@@ -206,7 +213,7 @@ class BLM(nn.Module):
         self.ln = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size)
         self.time_mlp = nn.Sequential(
-            nn.Linear(1, n_embed),
+            nn.Linear(n_embed, n_embed),
             nn.SiLU(),
             nn.Linear(n_embed, n_embed),
         )
@@ -214,7 +221,7 @@ class BLM(nn.Module):
     def forward(self, idx, t):
         token_embeddings = self.token_embedding_table(idx)
         position_embeddings = self.positional_embedding_table(torch.arange(idx.shape[1], device=device))
-        time_embeddings = self.time_mlp(t[:, None])
+        time_embeddings = self.time_mlp(timestep_embedding(t, n_embed))
         x = token_embeddings + position_embeddings + time_embeddings[:, None, :]
         x = self.blocks(x)
         x = self.ln(x)
