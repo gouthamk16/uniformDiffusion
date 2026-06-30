@@ -126,6 +126,8 @@ def corrupt(x0, t):
 
 def dwdse_loss(model, x0, t):
     # Diffusion-weighted denoising score entropy (uniform graph). x0:(B,T), t:(B,)
+    # R takes only two values per position (a/denom at x0, b/denom elsewhere), so the
+    # per-position sum over the vocab has a closed form: avoids materializing (B,T,N) R/K.
     lam, dlam = noise(t)
     beta = torch.exp(-lam)
     a = beta + (1 - beta) / vocab_size  # stay prob
@@ -135,15 +137,22 @@ def dwdse_loss(model, x0, t):
     log_s = model(xt, t).clamp(max=20)  # log of ratios s_theta
     s = torch.exp(log_s)                # (B, T, N)
 
-    # target ratio R[b,i,y] = p(y|x0)/p(xt|x0); 'a/denom' at true token, 'b/denom' elsewhere
     denom = torch.where(xt == x0, a[:, None], b[:, None])      # (B, T)
-    R = (b[:, None] / denom)[..., None].expand(-1, -1, vocab_size).clone()
-    R.scatter_(-1, x0[..., None], (a[:, None] / denom)[..., None])
+    ra = a[:, None] / denom            # ratio at the true token x0
+    rb = b[:, None] / denom            # ratio at every other token
+    Ka = ra * (ra.clamp_min(1e-9).log() - 1)
+    Kb = rb * (rb.clamp_min(1e-9).log() - 1)
 
-    K = R * (R.clamp_min(1e-9).log() - 1)
-    term = s - R * log_s + K                # Bregman score entropy per candidate y
-    term.scatter_(-1, xt[..., None], 0.0)   # drop y == xt (the current token)
-    return (dlam[:, None] * term.sum(-1)).mean()
+    ls_x0 = log_s.gather(-1, x0[..., None]).squeeze(-1)
+    ls_xt = log_s.gather(-1, xt[..., None]).squeeze(-1)
+    s_xt = s.gather(-1, xt[..., None]).squeeze(-1)
+
+    # full sum over y of (s - R*log_s + K)
+    full = s.sum(-1) - (rb * log_s.sum(-1) + (ra - rb) * ls_x0) + ((vocab_size - 1) * Kb + Ka)
+    # drop the y == xt term
+    is_xt_x0 = xt == x0
+    term_xt = s_xt - torch.where(is_xt_x0, ra, rb) * ls_xt + torch.where(is_xt_x0, Ka, Kb)
+    return (dlam[:, None] * (full - term_xt)).mean()
 
 
 def timestep_embedding(t, dim, max_period=10000):
