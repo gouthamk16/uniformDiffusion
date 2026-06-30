@@ -80,7 +80,7 @@ def sync():
 batch_size = 16
 block_size = 128
 n_embed = 512
-n_layers = 8
+n_layers = 6
 n_heads = 8
 drop_rate = 0.0
 epochs = 20000
