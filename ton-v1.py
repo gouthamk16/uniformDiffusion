@@ -159,15 +159,18 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads):
         super().__init__()
         self.n_heads = num_heads
+        head_dim = n_embed // num_heads
         self.qkv = nn.Linear(n_embed, 3 * n_embed, bias=False)
         self.proj = nn.Linear(n_embed, n_embed)
+        self.q_norm = nn.RMSNorm(head_dim)
+        self.k_norm = nn.RMSNorm(head_dim)
         self.dropout = nn.Dropout(drop_rate)
 
     def forward(self, x):
         B, T, C = x.shape
         q, k, v = self.qkv(x).split(n_embed, dim=2)
-        q = q.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
-        k = k.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
+        q = self.q_norm(q.view(B, T, self.n_heads, C // self.n_heads)).transpose(1, 2)
+        k = self.k_norm(k.view(B, T, self.n_heads, C // self.n_heads)).transpose(1, 2)
         v = v.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
         out = F.scaled_dot_product_attention(q, k, v, dropout_p=drop_rate if self.training else 0.0,
                                              scale=n_embed ** -0.5)
