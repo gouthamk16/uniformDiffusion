@@ -182,7 +182,7 @@ class MultiHeadAttention(nn.Module):
         self.k_norm = nn.RMSNorm(head_dim)
         self.dropout = nn.Dropout(drop_rate)
         half = head_dim // 2
-        freqs = 1.0 / (10000 ** (torch.arange(half).float() / half))
+        freqs = 1.0 / (1000 ** (torch.arange(half).float() / half))
         ang = torch.outer(torch.arange(block_size).float(), freqs)
         self.register_buffer('rope_cos', torch.cos(ang), persistent=False)
         self.register_buffer('rope_sin', torch.sin(ang), persistent=False)
