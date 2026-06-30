@@ -146,37 +146,24 @@ def dwdse_loss(model, x0, t):
     return (dlam[:, None] * term.sum(-1)).mean()
 
 
-# Attention block
-class Head(nn.Module):
-
-    def __init__(self, head_size):
-        super().__init__()
-        self.key = nn.Linear(n_embed, head_size, bias=False)
-        self.query = nn.Linear(n_embed, head_size, bias=False)
-        self.value = nn.Linear(n_embed, head_size, bias=False)
-        self.dropout = nn.Dropout(drop_rate)
-
-    def forward(self, x):
-        B, T, C = x.shape
-        k = self.key(x)
-        q = self.query(x)
-        wei = q @ k.transpose(-2, -1) / (C ** 0.5)
-        # bidirectional: no causal mask
-        wei = F.softmax(wei, dim=-1)
-        wei = self.dropout(wei)
-        v = self.value(x)
-        return wei @ v
-
+# Attention block: fused QKV + scaled_dot_product_attention (bidirectional)
 class MultiHeadAttention(nn.Module):
 
-    def __init__(self, num_heads, head_size):
+    def __init__(self, num_heads):
         super().__init__()
-        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
+        self.n_heads = num_heads
+        self.qkv = nn.Linear(n_embed, 3 * n_embed, bias=False)
         self.proj = nn.Linear(n_embed, n_embed)
         self.dropout = nn.Dropout(drop_rate)
 
     def forward(self, x):
-        out = torch.cat([h(x) for h in self.heads], dim=-1)
+        B, T, C = x.shape
+        q, k, v = self.qkv(x).split(n_embed, dim=2)
+        q = q.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
+        k = k.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
+        v = v.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=drop_rate if self.training else 0.0)
+        out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.dropout(self.proj(out))
 
 class FeedForward(nn.Module):
@@ -197,8 +184,7 @@ class Block(nn.Module):
 
     def __init__(self, n_embed, num_heads):
         super().__init__()
-        head_size = n_embed // num_heads
-        self.sa = MultiHeadAttention(num_heads, head_size)
+        self.sa = MultiHeadAttention(num_heads)
         self.ffwd = FeedForward(n_embed)
         self.ln1 = nn.LayerNorm(n_embed)
         self.ln2 = nn.LayerNorm(n_embed)
