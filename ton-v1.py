@@ -332,7 +332,8 @@ for epoch in range(start_epoch, epochs):
     t = (torch.arange(B, device=device) + torch.rand(B, device=device)) / B  # stratified
     sync(); t_b = time.perf_counter()
 
-    loss = dwdse_loss(model, x0, t)
+    with torch.autocast(device_type=device, dtype=torch.bfloat16):
+        loss = dwdse_loss(model, x0, t)
     sync(); t_c = time.perf_counter()
 
     optimizer.zero_grad(set_to_none=True)
