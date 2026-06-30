@@ -65,6 +65,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 torch.manual_seed(1337)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f"device: {device}" + (f" ({torch.cuda.get_device_name(0)})" if device == 'cuda' else ""))
 
