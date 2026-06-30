@@ -162,6 +162,13 @@ def timestep_embedding(t, dim, max_period=10000):
     return torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
 
 
+def apply_rope(x, cos, sin):
+    # x: (B, nh, T, hd); rotate halves
+    hd = x.shape[-1]
+    x1, x2 = x[..., :hd // 2], x[..., hd // 2:]
+    return torch.cat([x1 * cos - x2 * sin, x2 * cos + x1 * sin], dim=-1)
+
+
 # Attention block: fused QKV + scaled_dot_product_attention (bidirectional)
 class MultiHeadAttention(nn.Module):
 
@@ -174,6 +181,11 @@ class MultiHeadAttention(nn.Module):
         self.q_norm = nn.RMSNorm(head_dim)
         self.k_norm = nn.RMSNorm(head_dim)
         self.dropout = nn.Dropout(drop_rate)
+        half = head_dim // 2
+        freqs = 1.0 / (10000 ** (torch.arange(half).float() / half))
+        ang = torch.outer(torch.arange(block_size).float(), freqs)
+        self.register_buffer('rope_cos', torch.cos(ang), persistent=False)
+        self.register_buffer('rope_sin', torch.sin(ang), persistent=False)
 
     def forward(self, x):
         B, T, C = x.shape
@@ -181,6 +193,8 @@ class MultiHeadAttention(nn.Module):
         q = self.q_norm(q.view(B, T, self.n_heads, C // self.n_heads)).transpose(1, 2)
         k = self.k_norm(k.view(B, T, self.n_heads, C // self.n_heads)).transpose(1, 2)
         v = v.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
+        cos, sin = self.rope_cos[:T][None, None], self.rope_sin[:T][None, None]
+        q, k = apply_rope(q, cos, sin), apply_rope(k, cos, sin)
         out = F.scaled_dot_product_attention(q, k, v, dropout_p=drop_rate if self.training else 0.0)
         out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.dropout(self.proj(out))
@@ -223,7 +237,6 @@ class BLM(nn.Module):
     def __init__(self):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
-        self.positional_embedding_table = nn.Embedding(block_size, n_embed)
         self.blocks = nn.ModuleList([Block(n_embed, num_heads=n_heads) for _ in range(n_layers)])
         self.ln = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size)
@@ -234,10 +247,8 @@ class BLM(nn.Module):
         )
 
     def forward(self, idx, t):
-        token_embeddings = self.token_embedding_table(idx)
-        position_embeddings = self.positional_embedding_table(torch.arange(idx.shape[1], device=device))
         temb = self.time_mlp(timestep_embedding(t, n_embed))
-        x = token_embeddings + position_embeddings
+        x = self.token_embedding_table(idx)
         for block in self.blocks:
             x = block(x, temb)
         x = self.ln(x)
