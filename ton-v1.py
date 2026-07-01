@@ -21,29 +21,34 @@ vocab_size = enc.n_vocab
 decode = lambda l: enc.decode(l)
 
 # Data: karpathy/tinystories-gpt4-clean, tokenized once and cached to disk.
-CACHE = 'tinystories_gpt2.bin'
-MAX_TOKENS = 100_000_000
+CACHE = 'tinystories_gpt2_full.bin'  # full dataset, no token cap
 
 def build_cache():
+    # stream the whole dataset to disk (low memory); atomic rename so a killed
+    # build never leaves a partial cache that looks complete.
     from datasets import load_dataset
     t0 = time.perf_counter()
     ds = load_dataset('karpathy/tinystories-gpt4-clean', split='train', streaming=True)
     eot = enc.eot_token
-    chunks, total, batch = [], 0, []
-    for ex in ds:
-        batch.append(ex['text'])
-        if len(batch) == 1024:
-            for ids in enc.encode_ordinary_batch(batch):
+    tmp, total, report, batch = CACHE + '.tmp', 0, 50_000_000, []
+    with open(tmp, 'wb') as f:
+        def flush(texts):
+            nonlocal total
+            for ids in enc.encode_ordinary_batch(texts):
                 ids.append(eot)
-                chunks.append(np.array(ids, dtype=np.uint16))
+                np.array(ids, dtype=np.uint16).tofile(f)
                 total += len(ids)
-            batch = []
-            if total >= MAX_TOKENS:
-                break
-    arr = np.concatenate(chunks)
-    arr.tofile(CACHE)
-    stamp(f"tokenized {len(arr):,} tokens -> {CACHE}", t0)
-    return arr
+        for ex in ds:
+            batch.append(ex['text'])
+            if len(batch) == 1024:
+                flush(batch); batch = []
+                if total >= report:
+                    stamp(f"  tokenized {total:,} tokens...", t0); report += 50_000_000
+        if batch:
+            flush(batch)
+    os.replace(tmp, CACHE)
+    stamp(f"tokenized {total:,} tokens -> {CACHE}", t0)
+    return np.fromfile(CACHE, dtype=np.uint16)
 
 t0 = time.perf_counter()
 if os.path.exists(CACHE):
@@ -90,7 +95,8 @@ lr = 1e-3
 min_lr = 3e-5
 warmup_steps = 100
 gen_steps = 128
-train_budget_s = 300  # fixed wall-clock training budget per run
+checkpoint_interval = 1000
+CKPT = 'ckpt_full.pt'
 
 
 def lr_at(step):
@@ -305,7 +311,18 @@ def estimate_loss():
     return out
 
 
+def save_ckpt(epoch):
+    torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(),
+                'epoch': epoch, 'lossi': lossi}, CKPT)
+
 start_epoch = 0
+if os.path.exists(CKPT):
+    ck = torch.load(CKPT, map_location=device)
+    model.load_state_dict(ck['model'])
+    optimizer.load_state_dict(ck['opt'])
+    start_epoch = ck['epoch'] + 1
+    lossi = ck['lossi']
+    print(f"resumed from {CKPT} at step {start_epoch}")
 
 
 # training loop
@@ -314,9 +331,6 @@ timers = {'data': 0.0, 'loss': 0.0, 'backward': 0.0, 'step': 0.0}
 n_timed = 0
 
 for epoch in range(start_epoch, epochs):
-
-    if time.perf_counter() - train_start > train_budget_s:
-        break
 
     cur_lr = lr_at(epoch)
     for g in optimizer.param_groups:
@@ -365,6 +379,10 @@ for epoch in range(start_epoch, epochs):
     timers['step'] += t_e - t_d
     n_timed += 1
 
+    if epoch % checkpoint_interval == 0 and epoch > start_epoch:
+        save_ckpt(epoch)
+
+save_ckpt(epochs - 1)
 stamp("training done", train_start)
 
 # final eval at end of budget so the last logged val reflects end-of-training
