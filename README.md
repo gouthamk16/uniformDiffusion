@@ -30,24 +30,36 @@ The model is then trained to undo this swapping. It learns, for each spot in the
 
 ## The model itself
 
-- A plain Transformer, 8 layers, 512 hidden size, 8 attention heads.
-- Around 77 million parameters.
+- A Transformer, 6 layers, 512 hidden size, 16 attention heads. Around 77 million parameters.
 - Attention is **bidirectional**, meaning every word can look at every other word, both left and right. A normal GPT can only look left.
-- It also takes the noise level as an input, so it knows how messy the current text is.
+- Positions are encoded with **RoPE** (rotary embeddings) instead of a learned position table.
+- It takes the noise level as an input, fed into every block through **adaptive layer norm (adaLN)**, so each layer knows how messy the current text is.
 - Vocabulary is the GPT-2 tokenizer, about 50,257 tokens. (Working on coming up with a tokenizer for this model, GPT-2 tokenizer is borderline overkill for this model)
+- The layer count, head count, RoPE, adaLN, and most other choices here were found by the autoresearch loop (see below), not hand-picked.
 
 ## The data
 
-It trains on `karpathy/tinystories-gpt4-clean`, a set of very simple short stories written for small children. We use about 100 million tokens. The text is tokenized once and saved to `tinystories_gpt2.bin` so we do not have to redo it every run.
+It trains on `karpathy/tinystories-gpt4-clean`, a set of very simple short stories written for small children. The full corpus is about 540 million tokens, tokenized once and saved to `tinystories_gpt2_full.bin` so we do not have to redo it every run. (The autoresearch experiments used a 100-million-token slice for speed; the final full training run uses the whole thing.)
 
 ## Training details
 
 - Runs on CUDA (tested on an RTX 4060 Laptop, 8 GB).
 - Batch size 16, context length 128 tokens.
-- Learning rate warms up for 300 steps then cools down on a cosine curve.
-- Saves a checkpoint to `ckpt.pt` every 1000 steps.
-- If `ckpt.pt` already exists, the script picks up where it left off.
+- Trains in bfloat16 with TF32 matmuls and a fused Adam optimizer for speed.
+- Learning rate warms up for 100 steps then cools down on a cosine curve to a small final value.
+- Saves a checkpoint to `ckpt_full.pt` every 1000 steps.
+- If `ckpt_full.pt` already exists, the script picks up where it left off.
 - It times every part of every step (data loading, loss, backward, optimizer) and prints it.
+
+## Autoresearch
+
+![autoresearch progress](ar_progress.png)
+
+We didn't tune this model by hand; we let an agent do it. Following Karpathy's [autoresearch](https://github.com/karpathy/autoresearch) idea, an autonomous loop repeatedly edits the training script, trains for a fixed 5-minute budget on an RTX 4060 laptop GPU, reads back the validation loss, and keeps the change only if the number went down (otherwise it reverts and tries something else). Over **52 experiments (22 kept)** it drove val loss from **325k to 198k, about a 39% improvement**, entirely on its own. Most of the early gains came from speed hacks that simply let the step-starved model train more in the fixed budget: TF32, fused flash-attention, a bf16 pass, and a closed-form rewrite of the score-entropy loss, followed by a run of small architecture wins (QK-norm, sinusoidal + adaLN time conditioning, 16 heads, 6 layers). The cliff near the end of the graph is the single biggest find: swapping the learned position embedding for RoPE cut the loss by ~28% in one shot. Every dead end it hit along the way (bigger models, weight tying, SwiGLU, importance sampling) is logged with a one-line reason in `results.tsv`.
+
+And the best part: [check out some stories this model actually wrote](generated_samples.txt), produced from just ~20 minutes of total training on an RTX 4060 laptop GPU.
+
+We also benchmarked generation on the same RTX 4060 laptop GPU: about 2.3 seconds and ~1.4 GB of peak memory to write one story (128 denoising steps). The full per-run timings (prefill, decode, and memory) are saved in [gen_timing.json](gen_timing.json).
 
 ## Files
 
@@ -57,13 +69,19 @@ It trains on `karpathy/tinystories-gpt4-clean`, a set of very simple short stori
 
 ## Commands
 
-You need a venv with PyTorch (CUDA), tiktoken, datasets, and matplotlib installed.
+You need a venv with PyTorch (CUDA), tiktoken, datasets, numpy, and matplotlib installed.
 
-Train (this also resumes automatically if `ckpt.pt` is present):
+Train (this also resumes automatically if `ckpt_full.pt` is present):
 
 ```
 conda activate <env_name>
 python ton-v1.py
 ```
 
-Inference happens at the end of the same script. After training finishes it starts from random noise, runs the denoising steps, and prints one generated story. The loss curve is saved to `loss.png`.
+Inference runs at the end of the same script: after training it starts from random noise, runs the denoising steps, and prints one generated story. The loss curve is saved to `loss.png`.
+
+To generate stories from an already-trained checkpoint (`ckpt_full.pt`) without retraining:
+
+```
+python gen.py
+```
