@@ -312,8 +312,10 @@ def estimate_loss():
 
 
 def save_ckpt(epoch):
+    tmp = CKPT + '.tmp'
     torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(),
-                'epoch': epoch, 'lossi': lossi}, CKPT)
+                'epoch': epoch, 'lossi': lossi}, tmp)
+    os.replace(tmp, CKPT)  # atomic: a kill mid-save can't corrupt the good checkpoint
 
 start_epoch = 0
 if os.path.exists(CKPT):
