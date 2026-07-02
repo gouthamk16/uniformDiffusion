@@ -322,17 +322,31 @@ def gen_quality(n_samples=32, steps=gen_steps):
     return ppl, len(bg) / max(1, tot), x
 
 
-start_epoch = 0
+EXPCKPT = 'exp_ckpt.pt'  # per-experiment checkpoint so a kill doesn't waste training
+
+def save_exp(epoch, acc_s):
+    tmp = EXPCKPT + '.tmp'
+    torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(),
+                'epoch': epoch, 'lossi': lossi, 'acc_s': acc_s}, tmp)
+    os.replace(tmp, EXPCKPT)
+
+start_epoch, accumulated_s = 0, 0.0
+if os.path.exists(EXPCKPT):
+    ck = torch.load(EXPCKPT, map_location=device)
+    model.load_state_dict(ck['model']); optimizer.load_state_dict(ck['opt'])
+    start_epoch, lossi, accumulated_s = ck['epoch'] + 1, ck['lossi'], ck['acc_s']
+    print(f"resumed experiment at step {start_epoch}, {accumulated_s:.0f}s trained so far")
 
 
-# training loop
+# training loop (budget = accumulated training time across resumes)
 train_start = time.perf_counter()
+last_save = train_start
 timers = {'data': 0.0, 'loss': 0.0, 'backward': 0.0, 'step': 0.0}
 n_timed = 0
 
 for epoch in range(start_epoch, epochs):
 
-    if time.perf_counter() - train_start > train_budget_s:
+    if accumulated_s + (time.perf_counter() - train_start) > train_budget_s:
         break
 
     cur_lr = lr_at(epoch)
@@ -382,6 +396,10 @@ for epoch in range(start_epoch, epochs):
     timers['step'] += t_e - t_d
     n_timed += 1
 
+    if time.perf_counter() - last_save > 30:
+        save_exp(epoch, accumulated_s + (time.perf_counter() - train_start))
+        last_save = time.perf_counter()
+
 stamp("training done", train_start)
 
 # end-of-budget metrics: deterministic val loss (secondary) + GPT-2 gen-ppl (primary)
@@ -395,6 +413,9 @@ print(f"RESULT @ step {epoch} : val {losses['val']:.1f} | gen_ppl {ppl:.2f} "
       f"| distinct2 {distinct2:.3f}{mem}")
 print("\n--- sample ---")
 print(decode(samples[0].tolist()))
+
+if os.path.exists(EXPCKPT):
+    os.remove(EXPCKPT)  # experiment finished; next launch starts fresh
 
 plt.plot([l.item() if torch.is_tensor(l) else l for l in lossi])
 plt.savefig('loss.png')
