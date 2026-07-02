@@ -95,8 +95,7 @@ lr = 1e-3
 min_lr = 3e-5
 warmup_steps = 100
 gen_steps = 128
-checkpoint_interval = 1000
-CKPT = 'ckpt_full.pt'
+train_budget_s = int(os.environ.get('BUDGET', 600))  # 10-min autoresearch budget (fresh run)
 
 
 def lr_at(step):
@@ -311,20 +310,40 @@ def estimate_loss():
     return out
 
 
-def save_ckpt(epoch):
-    tmp = CKPT + '.tmp'
-    torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(),
-                'epoch': epoch, 'lossi': lossi}, tmp)
-    os.replace(tmp, CKPT)  # atomic: a kill mid-save can't corrupt the good checkpoint
+_gpt2 = None
+
+@torch.no_grad()
+def gen_quality(n_samples=32, steps=gen_steps):
+    # loss-agnostic quality: generative perplexity under GPT-2 (our samples are GPT-2
+    # tokens already) plus distinct-2 diversity to catch degenerate low-ppl output.
+    global _gpt2
+    if _gpt2 is None:
+        import importlib.util  # hide the (broken) torchvision from transformers' lazy loader
+        _orig = importlib.util.find_spec
+        importlib.util.find_spec = lambda n, *a, **k: None if str(n).split('.')[0] == 'torchvision' else _orig(n, *a, **k)
+        from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel
+        _gpt2 = GPT2LMHeadModel.from_pretrained('gpt2').to(device).eval()
+    model.eval()
+    x = torch.cat([model.generate(n_samples=16, steps=steps)
+                   for _ in range((n_samples + 15) // 16)], 0)[:n_samples]
+    model.train()
+    nll, ntok = 0.0, 0
+    for i in range(0, n_samples, 8):
+        ids = x[i:i + 8]
+        logits = _gpt2(ids).logits[:, :-1]
+        tgt = ids[:, 1:]
+        nll += F.cross_entropy(logits.reshape(-1, logits.size(-1)), tgt.reshape(-1),
+                               reduction='sum').item()
+        ntok += tgt.numel()
+    ppl = math.exp(nll / ntok)
+    bg, tot = set(), 0
+    for r in x.tolist():
+        for j in range(len(r) - 1):
+            bg.add((r[j], r[j + 1])); tot += 1
+    return ppl, len(bg) / max(1, tot), x
+
 
 start_epoch = 0
-if os.path.exists(CKPT):
-    ck = torch.load(CKPT, map_location=device)
-    model.load_state_dict(ck['model'])
-    optimizer.load_state_dict(ck['opt'])
-    start_epoch = ck['epoch'] + 1
-    lossi = ck['lossi']
-    print(f"resumed from {CKPT} at step {start_epoch}")
 
 
 # training loop
@@ -333,6 +352,9 @@ timers = {'data': 0.0, 'loss': 0.0, 'backward': 0.0, 'step': 0.0}
 n_timed = 0
 
 for epoch in range(start_epoch, epochs):
+
+    if time.perf_counter() - train_start > train_budget_s:
+        break
 
     cur_lr = lr_at(epoch)
     for g in optimizer.param_groups:
@@ -381,25 +403,19 @@ for epoch in range(start_epoch, epochs):
     timers['step'] += t_e - t_d
     n_timed += 1
 
-    if epoch % checkpoint_interval == 0 and epoch > start_epoch:
-        save_ckpt(epoch)
-
-save_ckpt(epochs - 1)
 stamp("training done", train_start)
 
-# final eval at end of budget so the last logged val reflects end-of-training
+# end-of-budget metrics: deterministic val loss (secondary) + GPT-2 gen-ppl (primary)
 losses = estimate_loss()
 lossi.append(losses['val'])
-mem = f" | gpu {torch.cuda.max_memory_allocated()/1e9:.2f}GB" if device == 'cuda' else ""
-print(f"Step {epoch}/{epochs} : train {losses['train']:.4f} | val {losses['val']:.4f} "
-      f"| lr {lr_at(epoch):.2e} | eval --{mem}")
-
-# Generate samples
 tg = time.perf_counter()
-sample = model.generate(n_samples=1, steps=gen_steps)
-stamp(f"generation ({gen_steps} steps)", tg)
+ppl, distinct2, samples = gen_quality()
+stamp("quality eval", tg)
+mem = f" | gpu {torch.cuda.max_memory_allocated()/1e9:.2f}GB" if device == 'cuda' else ""
+print(f"RESULT @ step {epoch} : val {losses['val']:.1f} | gen_ppl {ppl:.2f} "
+      f"| distinct2 {distinct2:.3f}{mem}")
 print("\n--- sample ---")
-print(decode(sample[0].tolist()))
+print(decode(samples[0].tolist()))
 
 plt.plot([l.item() if torch.is_tensor(l) else l for l in lossi])
 plt.savefig('loss.png')
