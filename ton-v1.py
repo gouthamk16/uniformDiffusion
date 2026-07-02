@@ -292,7 +292,7 @@ def estimate_loss():
 _gpt2 = None
 
 @torch.no_grad()
-def gen_quality(n_samples=32, steps=gen_steps):
+def gen_quality(n_samples=8, steps=gen_steps):
     # loss-agnostic quality: generative perplexity under GPT-2 (our samples are GPT-2
     # tokens already) plus distinct-2 diversity to catch degenerate low-ppl output.
     global _gpt2
@@ -402,14 +402,13 @@ for epoch in range(start_epoch, epochs):
 
 stamp("training done", train_start)
 
-# end-of-budget metrics: deterministic val loss (secondary) + GPT-2 gen-ppl (primary)
-losses = estimate_loss()
-lossi.append(losses['val'])
+# end-of-budget metrics: GPT-2 gen-ppl (primary). val is the last periodic eval (secondary).
 tg = time.perf_counter()
 ppl, distinct2, samples = gen_quality()
 stamp("quality eval", tg)
+val = float(lossi[-1]) if lossi else float('nan')
 mem = f" | gpu {torch.cuda.max_memory_allocated()/1e9:.2f}GB" if device == 'cuda' else ""
-print(f"RESULT @ step {epoch} : val {losses['val']:.1f} | gen_ppl {ppl:.2f} "
+print(f"RESULT @ step {epoch} : val {val:.1f} | gen_ppl {ppl:.2f} "
       f"| distinct2 {distinct2:.3f}{mem}")
 print("\n--- sample ---")
 print(decode(samples[0].tolist()))
