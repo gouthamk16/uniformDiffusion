@@ -18,7 +18,8 @@ def stamp(msg, t0):
 # GPT-2 BPE tokenizer
 enc = tiktoken.get_encoding("gpt2")
 vocab_size = enc.n_vocab
-decode = lambda l: enc.decode(l)
+mask_id = vocab_size          # MDLM absorbing [MASK] token (extra embedding row)
+decode = lambda l: enc.decode([t for t in l if t < vocab_size])
 
 # Data: karpathy/tinystories-gpt4-clean, tokenized once and cached to disk.
 CACHE = 'tinystories_gpt2_full.bin'  # full dataset, no token cap
@@ -122,42 +123,19 @@ def noise(t):
     return lam, lam * log_ratio.to(t.device)
 
 def corrupt(x0, t):
-    lam, _ = noise(t)
-    beta = torch.exp(-lam)
-    replace = torch.rand(x0.shape, device=x0.device) < (1 - beta)[:, None]
-    rand_tok = torch.randint(vocab_size, x0.shape, device=x0.device)
-    return torch.where(replace, rand_tok, x0)
+    # MDLM absorbing forward: each token -> [MASK] independently with prob t (linear schedule)
+    mask = torch.rand(x0.shape, device=x0.device) < t[:, None]
+    return torch.where(mask, mask_id, x0), mask
 
 
 def dwdse_loss(model, x0, t):
-    # Diffusion-weighted denoising score entropy (uniform graph). x0:(B,T), t:(B,)
-    # R takes only two values per position (a/denom at x0, b/denom elsewhere), so the
-    # per-position sum over the vocab has a closed form: avoids materializing (B,T,N) R/K.
-    lam, dlam = noise(t)
-    beta = torch.exp(-lam)
-    a = beta + (1 - beta) / vocab_size  # stay prob
-    b = (1 - beta) / vocab_size         # switch prob
-
-    xt = corrupt(x0, t)
-    log_s = model(xt, t).clamp(max=20)  # log of ratios s_theta
-    s = torch.exp(log_s)                # (B, T, N)
-
-    denom = torch.where(xt == x0, a[:, None], b[:, None])      # (B, T)
-    ra = a[:, None] / denom            # ratio at the true token x0
-    rb = b[:, None] / denom            # ratio at every other token
-    Ka = ra * (ra.clamp_min(1e-9).log() - 1)
-    Kb = rb * (rb.clamp_min(1e-9).log() - 1)
-
-    ls_x0 = log_s.gather(-1, x0[..., None]).squeeze(-1)
-    ls_xt = log_s.gather(-1, xt[..., None]).squeeze(-1)
-    s_xt = s.gather(-1, xt[..., None]).squeeze(-1)
-
-    # full sum over y of (s - R*log_s + K)
-    full = s.sum(-1) - (rb * log_s.sum(-1) + (ra - rb) * ls_x0) + ((vocab_size - 1) * Kb + Ka)
-    # drop the y == xt term
-    is_xt_x0 = xt == x0
-    term_xt = s_xt - torch.where(is_xt_x0, ra, rb) * ls_xt + torch.where(is_xt_x0, Ka, Kb)
-    return (dlam[:, None] * (full - term_xt)).mean()
+    # MDLM NELBO (linear schedule): (1/t)-weighted cross-entropy at masked positions only.
+    xt, mask = corrupt(x0, t)
+    logits = model(xt, t)                                    # (B, T, vocab)
+    ce = F.cross_entropy(logits.reshape(-1, vocab_size), x0.reshape(-1),
+                         reduction='none').view(x0.shape)    # (B, T)
+    per_sample = (ce * mask).sum(-1) / t.clamp_min(1e-3)     # (B,)
+    return per_sample.mean()
 
 
 def timestep_embedding(t, dim, max_period=10000):
@@ -241,7 +219,7 @@ class BLM(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
+        self.token_embedding_table = nn.Embedding(vocab_size + 1, n_embed)  # +1 for [MASK]
         self.blocks = nn.ModuleList([Block(n_embed, num_heads=n_heads) for _ in range(n_layers)])
         self.ln = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size)
@@ -261,21 +239,22 @@ class BLM(nn.Module):
 
     @torch.no_grad()
     def generate(self, n_samples, steps=128):
-        # Euler tau-leaping: start from pure noise (t=1), clean up down to t=0
-        N = vocab_size
-        x = torch.randint(N, (n_samples, block_size), device=device)
+        # MDLM reverse process: start all [MASK], progressively unmask to predicted tokens.
+        x = torch.full((n_samples, block_size), mask_id, device=device)
         ts = torch.linspace(1.0, 0.0, steps + 1, device=device)
         for i in range(steps):
             t = ts[i].expand(n_samples)
-            dt = ts[i] - ts[i + 1]
-            _, sigma = noise(t)
-            s = torch.exp(self(x, t).clamp(max=20))
-            rate = sigma[:, None, None] / N * s
-            rate.scatter_(-1, x[..., None], 0.0)
-            probs = (rate * dt).clamp(0, 1)
-            stay = (1 - probs.sum(-1, keepdim=True)).clamp_min(0)
-            probs.scatter_(-1, x[..., None], stay)
-            x = torch.multinomial(probs.view(-1, N), 1).view(n_samples, block_size)
+            probs = F.softmax(self(x, t), dim=-1)
+            x0_hat = torch.multinomial(probs.view(-1, vocab_size), 1).view(n_samples, block_size)
+            is_mask = x == mask_id
+            unmask_p = (ts[i] - ts[i + 1]) / ts[i].clamp_min(1e-6)
+            do = is_mask & (torch.rand(x.shape, device=device) < unmask_p)
+            x = torch.where(do, x0_hat, x)
+        is_mask = x == mask_id
+        if is_mask.any():
+            probs = F.softmax(self(x, ts[-1].expand(n_samples)), dim=-1)
+            x0_hat = torch.multinomial(probs.view(-1, vocab_size), 1).view(n_samples, block_size)
+            x = torch.where(is_mask, x0_hat, x)
         return x
 
 
