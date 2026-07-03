@@ -95,7 +95,7 @@ eval_iters = 40
 lr = 3e-3
 min_lr = 3e-5
 warmup_steps = 100
-gen_steps = 128
+gen_steps = 256
 train_budget_s = int(os.environ.get('BUDGET', 600))  # 10-min autoresearch budget (fresh run)
 
 
