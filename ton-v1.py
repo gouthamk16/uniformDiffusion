@@ -152,6 +152,13 @@ def apply_rope(x, cos, sin):
     return torch.cat([x1 * cos - x2 * sin, x2 * cos + x1 * sin], dim=-1)
 
 
+def topk_sample(logits, k=50):
+    # sample from the top-k tokens only (drops low-prob tail garbage)
+    v = logits.topk(min(k, logits.size(-1)), dim=-1).values
+    logits = logits.masked_fill(logits < v[..., -1:], float('-inf'))
+    return torch.multinomial(F.softmax(logits, -1).view(-1, vocab_size), 1).view(logits.shape[:-1])
+
+
 # Attention block: fused QKV + scaled_dot_product_attention (bidirectional)
 class MultiHeadAttention(nn.Module):
 
@@ -244,16 +251,14 @@ class BLM(nn.Module):
         ts = torch.linspace(1.0, 0.0, steps + 1, device=device)
         for i in range(steps):
             t = ts[i].expand(n_samples)
-            probs = F.softmax(self(x, t), dim=-1)
-            x0_hat = torch.multinomial(probs.view(-1, vocab_size), 1).view(n_samples, block_size)
+            x0_hat = topk_sample(self(x, t))
             is_mask = x == mask_id
             unmask_p = (ts[i] - ts[i + 1]) / ts[i].clamp_min(1e-6)
             do = is_mask & (torch.rand(x.shape, device=device) < unmask_p)
             x = torch.where(do, x0_hat, x)
         is_mask = x == mask_id
         if is_mask.any():
-            probs = F.softmax(self(x, ts[-1].expand(n_samples)), dim=-1)
-            x0_hat = torch.multinomial(probs.view(-1, vocab_size), 1).view(n_samples, block_size)
+            x0_hat = topk_sample(self(x, ts[-1].expand(n_samples)))
             x = torch.where(is_mask, x0_hat, x)
         return x
 
