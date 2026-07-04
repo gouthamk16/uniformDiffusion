@@ -327,32 +327,31 @@ def gen_quality(n_samples=8, steps=gen_steps):
     return ppl, len(bg) / max(1, tot), x
 
 
-EXPCKPT = 'exp_ckpt.pt'  # per-experiment checkpoint so a kill doesn't waste training
+CKPT = 'ckpt_mdlm.pt'          # latest (for resume across kills)
+BEST = 'ckpt_mdlm_best.pt'     # best-val model so far
+checkpoint_interval = 1000
 
-def save_exp(epoch, acc_s):
-    tmp = EXPCKPT + '.tmp'
+def save_ckpt(path, epoch, best_val):
+    tmp = path + '.tmp'
     torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(),
-                'epoch': epoch, 'lossi': lossi, 'acc_s': acc_s}, tmp)
-    os.replace(tmp, EXPCKPT)
+                'epoch': epoch, 'lossi': lossi, 'best_val': best_val}, tmp)
+    os.replace(tmp, path)
 
-start_epoch, accumulated_s = 0, 0.0
-if os.path.exists(EXPCKPT):
-    ck = torch.load(EXPCKPT, map_location=device)
+start_epoch, best_val = 0, float('inf')
+if os.path.exists(CKPT):
+    ck = torch.load(CKPT, map_location=device)
     model.load_state_dict(ck['model']); optimizer.load_state_dict(ck['opt'])
-    start_epoch, lossi, accumulated_s = ck['epoch'] + 1, ck['lossi'], ck['acc_s']
-    print(f"resumed experiment at step {start_epoch}, {accumulated_s:.0f}s trained so far")
+    start_epoch, lossi, best_val = ck['epoch'] + 1, ck['lossi'], ck['best_val']
+    print(f"resumed from {CKPT} at step {start_epoch} (best val {best_val:.2f})")
 
 
-# training loop (budget = accumulated training time across resumes)
+# full training loop
 train_start = time.perf_counter()
 last_save = train_start
 timers = {'data': 0.0, 'loss': 0.0, 'backward': 0.0, 'step': 0.0}
 n_timed = 0
 
 for epoch in range(start_epoch, epochs):
-
-    if accumulated_s + (time.perf_counter() - train_start) > train_budget_s:
-        break
 
     cur_lr = lr_at(epoch)
     for g in optimizer.param_groups:
@@ -361,8 +360,14 @@ for epoch in range(start_epoch, epochs):
     if epoch % eval_interval == 0:
         te = time.perf_counter()
         losses = estimate_loss()
-        lossi.append(losses['val'])
+        val = float(losses['val'])
+        lossi.append(val)
         sync()
+        best_tag = ""
+        if val < best_val:                       # save whenever it beats every prior eval
+            best_val = val
+            save_ckpt(BEST, epoch, best_val)
+            best_tag = "  *BEST*"
         eval_dt = time.perf_counter() - te
         if n_timed:
             per = {k: 1000 * v / n_timed for k, v in timers.items()}
@@ -374,8 +379,8 @@ for epoch in range(start_epoch, epochs):
             timers = {k: 0.0 for k in timers}
             n_timed = 0
         mem = f" | gpu {torch.cuda.max_memory_allocated()/1e9:.2f}GB" if device == 'cuda' else ""
-        print(f"Step {epoch}/{epochs} : train {losses['train']:.4f} | val {losses['val']:.4f} "
-              f"| lr {cur_lr:.2e} | eval {eval_dt:.2f}s{mem}")
+        print(f"Step {epoch}/{epochs} : train {losses['train']:.4f} | val {val:.4f} "
+              f"| lr {cur_lr:.2e} | eval {eval_dt:.2f}s{mem}{best_tag}")
 
     sync(); t_a = time.perf_counter()
     x0 = get_batch('train')
@@ -401,25 +406,24 @@ for epoch in range(start_epoch, epochs):
     timers['step'] += t_e - t_d
     n_timed += 1
 
-    if time.perf_counter() - last_save > 30:
-        save_exp(epoch, accumulated_s + (time.perf_counter() - train_start))
+    if time.perf_counter() - last_save > 60:     # latest checkpoint for kill-safe resume
+        save_ckpt(CKPT, epoch, best_val)
         last_save = time.perf_counter()
 
+save_ckpt(CKPT, epochs - 1, best_val)
+losses = estimate_loss(); val = float(losses['val']); lossi.append(val)
+if val < best_val:
+    best_val = val; save_ckpt(BEST, epochs - 1, best_val)
 stamp("training done", train_start)
 
-# end-of-budget metrics: GPT-2 gen-ppl (primary). val is the last periodic eval (secondary).
+# final quality report on the just-trained model
 tg = time.perf_counter()
 ppl, distinct2, samples = gen_quality()
 stamp("quality eval", tg)
-val = float(lossi[-1]) if lossi else float('nan')
-mem = f" | gpu {torch.cuda.max_memory_allocated()/1e9:.2f}GB" if device == 'cuda' else ""
-print(f"RESULT @ step {epoch} : val {val:.1f} | gen_ppl {ppl:.2f} "
-      f"| distinct2 {distinct2:.3f}{mem}")
+print(f"FINAL @ step {epoch} : val {val:.1f} | best_val {best_val:.1f} | "
+      f"gen_ppl {ppl:.2f} | distinct2 {distinct2:.3f}")
 print("\n--- sample ---")
 print(decode(samples[0].tolist()))
-
-if os.path.exists(EXPCKPT):
-    os.remove(EXPCKPT)  # experiment finished; next launch starts fresh
 
 plt.plot([l.item() if torch.is_tensor(l) else l for l in lossi])
 plt.savefig('loss.png')
