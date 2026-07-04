@@ -152,7 +152,7 @@ def apply_rope(x, cos, sin):
     return torch.cat([x1 * cos - x2 * sin, x2 * cos + x1 * sin], dim=-1)
 
 
-def topk_sample(logits, k=50):
+def topk_sample(logits, k=20):
     # sample from the top-k tokens only (drops low-prob tail garbage)
     v = logits.topk(min(k, logits.size(-1)), dim=-1).values
     logits = logits.masked_fill(logits < v[..., -1:], float('-inf'))
