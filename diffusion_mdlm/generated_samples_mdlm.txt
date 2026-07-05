@@ -1,0 +1,69 @@
+loaded ckpt @ step 99999 | best_val 283.57
+
+======================================================================
+128 denoising steps
+======================================================================
+
+--- sample 1 (128 steps) ---
+. He liked it so much that he loved his mom.
+One day, the smart cat saw a big dog. The dog wanted tree and the cat. The cat was in the tree. The cat said it was the good dog. They took turns to the park. The smart cat saw a big dog. The dog was brave, so he jumped.
+The cat saw the bird. The bird was very happy.
+The cat and the bird became friends. They played and ate the tree together. The bird was still good too. The cat was happy again.<|endoftext|>Once there was a cow, four pigs. The cow had
+
+--- sample 2 (128 steps) ---
+ to provide food with his mom. One day, Tim's mom left the food. She was very hungry.
+In the kitchen, Sam saw a big, scary dog. The dog was hungry and he had no food on it. The dog took his food and ran away from his food! Sam jumped and ran away. Sam was scared and knew what to do.
+Sam ran to the kitchen and saw that he was not hungry. He saw a plate on the table with the cover of the food. Tim thought about it and had an idea. He laughed and said, "We can add food to the dog. It is good
+
+--- sample 3 (128 steps) ---
+ The dog and dog had a great day. They ran out of the huge hill, happy to unite and play with the lumber. They were best friends, and had lots of fun every day.<|endoftext|>One day, a girl named Lily found a new zip in her room. It was a lot of equipment. But she wanted to see what was inside her room. She put on the ball, and the shoes.
+First, Lily took the zip of the zip for her. She put it on the box, and her mom told her Lily, "This is a fun day for the ride!" Lily was so happy and proud. She
+
+--- sample 4 (128 steps) ---
+ The cat was too big too, and the dog was there! He kept on looking for the dog to come.
+The dog's dog saw the tree and dropped the ball under her nose. He was very happy. He brought the ball back to the dog. The ball was safe, and the dog was not angry. And he went back to its home.<|endoftext|>Once upon a time, in a small town, there lived a small cat named Bobo. Bobo was very good at to play and all his friends in the sun.
+One day, Bob and his friends went to go to the park. They saw the big
+
+--- sample 5 (128 steps) ---
+ the toy and ran with it everywhere. But, it was very cold. When he opened it, he saw a kitten. It was still lost. Tim cried and gave his mom some help. He was so happy. His mom said, "Thank you for helping me make a new friend." Tim felt so lucky. He never wanted to play with his friends again.<|endoftext|>Once upon a time, there was a popular human named Tim. He was a happy dog who liked to play with his friends. He was a little boy named Tim.
+One day Tim had a plan. He wanted to buy a toy. He asked his mom
+
+--- sample 6 (128 steps) ---
+ not fair. They still wanted to play with each other and take care of themselves.
+Then, they play with their toys and calm down. Mom gives the old toys to each other. Tim and Lily are angry. They drop their toys and their dolls. They want to share the toys and play with them. They love to play with their toys.
+Tim and Lily see their faces. They are sad. They talk to their faces. They forget their idea. They start to argue and shout. It will be fun. They take turns to kick. They laugh and have fun. At the end of the day, they see the
+
+======================================================================
+256 denoising steps
+======================================================================
+
+--- sample 1 (256 steps) ---
+ balloon. She looked for the balloon and the doll, but she could not find it. She felt sad and angry. She heard a loud cry. She came back with the balloon and saw it on the road. She ran to the park. There was the driver on the balloon. She wanted the balloon.
+Anna was angry. She grabbed it and took her balloon from her doll. She tried to call it to fly away and the balloon. She was sad and scared, but she was shocked and scared.
+Mom was for angry. She did not want to be naughty. She was persistent. She did not like new things.
+
+--- sample 2 (256 steps) ---
+, something unexpected happened! The little bird could fly, and it flew down from the nest! Everyone was surprised, but the bird was happy. Max, the cat, the little bird became friends and had fun with the bird every time.<|endoftext|>Tim and Tom were playing in a room. In the room, they had a big box of toys and lots of toys. Tom did not want to play with the toys on the floor.
+Tom walked outside to the box. He thought it was boring. He had a big box to play with. He picked it up and went to sleep. He saw the big box and thought it was
+
+--- sample 3 (256 steps) ---
+ named Tim. Tim was so happy when he played.
+After the day, Tim decided to go back and play with his friends. This time, Tim was happy, and they raced around the mall together all day. They had so had fun at the park.<|endoftext|>One day, a little fast rabbit was walking on a trail. He liked to jump and lay to the ground.
+As the rabbit walked, he saw another bunny. The bunny had big bear. The rabbit said, "Hello, I am very hungry."
+The wolf liked the rabbit. The bear said, "What is inside in taking me food?" The wolf
+
+--- sample 4 (256 steps) ---
+ playing the game, Tim had an idea. the generous man had an idea. He flew up to put the pistol and gave it back to Tim and it was so to keep him safe and safe. The boy was happy again, and he was saved that day.<|endoftext|>Once upon a time, in the big ranch, there was an adorable dog named Spot. Spot lived on the ranch with his toys with his friends. One day, Spot went to the park to gather food and play with his friends. Spot loved to play in the grass in the park. Spot thought his mommy a big leaf and a horse, looking at the same
+
+--- sample 5 (256 steps) ---
+ is her big dog. The dog is holding a shiny thing in the bag. Sara holds it on her car and shows it to Ben.
+"Happy birthday, Sara!" Ben says.
+"Wow, it is very nice," her mom.
+"I love it!" Ben says. "He put it on her car." Sara likes it. She likes it too.
+Ben likes it. It says to his car. But Sara wants to play with Ben's car. It is red and shiny. It feels smooth and smooth. She gives Sara and Ben the car. Ben says thank you, looking at it.
+"
+
+--- sample 6 (256 steps) ---
+ at his car. She thought Tim was clever. He knew that the model car did not come out.
+Mom was not happy. She put the sticker back on the car and made the car go back to play with the model car again.<|endoftext|>Once there was a little dog named Tim. Tim loved to hang his camera on the wall. He would sit with his camera.
+As the camera was blue, his pictures all day long. One day, Spot saw a big house with a newspaper. Tim saw a dog and had trouble under the table. He did not want to see who took the newspaper away. The sound was bad

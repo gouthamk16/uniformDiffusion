@@ -18,11 +18,10 @@ def stamp(msg, t0):
 # GPT-2 BPE tokenizer
 enc = tiktoken.get_encoding("gpt2")
 vocab_size = enc.n_vocab
-mask_id = vocab_size          # MDLM absorbing [MASK] token (extra embedding row)
-decode = lambda l: enc.decode([t for t in l if t < vocab_size])
+decode = lambda l: enc.decode(l)
 
 # Data: karpathy/tinystories-gpt4-clean, tokenized once and cached to disk.
-CACHE = 'tinystories_gpt2_full.bin'  # full dataset, no token cap
+CACHE = '../tinystories_gpt2_full.bin'  # full dataset, no token cap (shared, one dir up)
 
 def build_cache():
     # stream the whole dataset to disk (low memory); atomic rename so a killed
@@ -92,11 +91,12 @@ drop_rate = 0.0
 epochs = 100000
 eval_interval = 1000
 eval_iters = 40
-lr = 3e-3
+lr = 1e-3
 min_lr = 3e-5
 warmup_steps = 100
-gen_steps = 256
-train_budget_s = int(os.environ.get('BUDGET', 600))  # 10-min autoresearch budget (fresh run)
+gen_steps = 128
+checkpoint_interval = 1000
+CKPT = 'ckpt_full.pt'
 
 
 def lr_at(step):
@@ -123,19 +123,42 @@ def noise(t):
     return lam, lam * log_ratio.to(t.device)
 
 def corrupt(x0, t):
-    # MDLM absorbing forward: each token -> [MASK] independently with prob t (linear schedule)
-    mask = torch.rand(x0.shape, device=x0.device) < t[:, None]
-    return torch.where(mask, mask_id, x0), mask
+    lam, _ = noise(t)
+    beta = torch.exp(-lam)
+    replace = torch.rand(x0.shape, device=x0.device) < (1 - beta)[:, None]
+    rand_tok = torch.randint(vocab_size, x0.shape, device=x0.device)
+    return torch.where(replace, rand_tok, x0)
 
 
 def dwdse_loss(model, x0, t):
-    # MDLM NELBO (linear schedule): (1/t)-weighted cross-entropy at masked positions only.
-    xt, mask = corrupt(x0, t)
-    logits = model(xt, t)                                    # (B, T, vocab)
-    ce = F.cross_entropy(logits.reshape(-1, vocab_size), x0.reshape(-1),
-                         reduction='none').view(x0.shape)    # (B, T)
-    per_sample = (ce * mask).sum(-1) / t.clamp_min(1e-3)     # (B,)
-    return per_sample.mean()
+    # Diffusion-weighted denoising score entropy (uniform graph). x0:(B,T), t:(B,)
+    # R takes only two values per position (a/denom at x0, b/denom elsewhere), so the
+    # per-position sum over the vocab has a closed form: avoids materializing (B,T,N) R/K.
+    lam, dlam = noise(t)
+    beta = torch.exp(-lam)
+    a = beta + (1 - beta) / vocab_size  # stay prob
+    b = (1 - beta) / vocab_size         # switch prob
+
+    xt = corrupt(x0, t)
+    log_s = model(xt, t).clamp(max=20)  # log of ratios s_theta
+    s = torch.exp(log_s)                # (B, T, N)
+
+    denom = torch.where(xt == x0, a[:, None], b[:, None])      # (B, T)
+    ra = a[:, None] / denom            # ratio at the true token x0
+    rb = b[:, None] / denom            # ratio at every other token
+    Ka = ra * (ra.clamp_min(1e-9).log() - 1)
+    Kb = rb * (rb.clamp_min(1e-9).log() - 1)
+
+    ls_x0 = log_s.gather(-1, x0[..., None]).squeeze(-1)
+    ls_xt = log_s.gather(-1, xt[..., None]).squeeze(-1)
+    s_xt = s.gather(-1, xt[..., None]).squeeze(-1)
+
+    # full sum over y of (s - R*log_s + K)
+    full = s.sum(-1) - (rb * log_s.sum(-1) + (ra - rb) * ls_x0) + ((vocab_size - 1) * Kb + Ka)
+    # drop the y == xt term
+    is_xt_x0 = xt == x0
+    term_xt = s_xt - torch.where(is_xt_x0, ra, rb) * ls_xt + torch.where(is_xt_x0, Ka, Kb)
+    return (dlam[:, None] * (full - term_xt)).mean()
 
 
 def timestep_embedding(t, dim, max_period=10000):
@@ -150,13 +173,6 @@ def apply_rope(x, cos, sin):
     hd = x.shape[-1]
     x1, x2 = x[..., :hd // 2], x[..., hd // 2:]
     return torch.cat([x1 * cos - x2 * sin, x2 * cos + x1 * sin], dim=-1)
-
-
-def topk_sample(logits, k=20):
-    # sample from the top-k tokens only (drops low-prob tail garbage)
-    v = logits.topk(min(k, logits.size(-1)), dim=-1).values
-    logits = logits.masked_fill(logits < v[..., -1:], float('-inf'))
-    return torch.multinomial(F.softmax(logits, -1).view(-1, vocab_size), 1).view(logits.shape[:-1])
 
 
 # Attention block: fused QKV + scaled_dot_product_attention (bidirectional)
@@ -226,7 +242,7 @@ class BLM(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size + 1, n_embed)  # +1 for [MASK]
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
         self.blocks = nn.ModuleList([Block(n_embed, num_heads=n_heads) for _ in range(n_layers)])
         self.ln = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size)
@@ -246,20 +262,21 @@ class BLM(nn.Module):
 
     @torch.no_grad()
     def generate(self, n_samples, steps=128):
-        # MDLM reverse process: start all [MASK], progressively unmask to predicted tokens.
-        x = torch.full((n_samples, block_size), mask_id, device=device)
+        # Euler tau-leaping: start from pure noise (t=1), clean up down to t=0
+        N = vocab_size
+        x = torch.randint(N, (n_samples, block_size), device=device)
         ts = torch.linspace(1.0, 0.0, steps + 1, device=device)
         for i in range(steps):
             t = ts[i].expand(n_samples)
-            x0_hat = topk_sample(self(x, t))
-            is_mask = x == mask_id
-            unmask_p = (ts[i] - ts[i + 1]) / ts[i].clamp_min(1e-6)
-            do = is_mask & (torch.rand(x.shape, device=device) < unmask_p)
-            x = torch.where(do, x0_hat, x)
-        is_mask = x == mask_id
-        if is_mask.any():
-            x0_hat = topk_sample(self(x, ts[-1].expand(n_samples)))
-            x = torch.where(is_mask, x0_hat, x)
+            dt = ts[i] - ts[i + 1]
+            _, sigma = noise(t)
+            s = torch.exp(self(x, t).clamp(max=20))
+            rate = sigma[:, None, None] / N * s
+            rate.scatter_(-1, x[..., None], 0.0)
+            probs = (rate * dt).clamp(0, 1)
+            stay = (1 - probs.sum(-1, keepdim=True)).clamp_min(0)
+            probs.scatter_(-1, x[..., None], stay)
+            x = torch.multinomial(probs.view(-1, N), 1).view(n_samples, block_size)
         return x
 
 
@@ -294,60 +311,24 @@ def estimate_loss():
     return out
 
 
-_gpt2 = None
-
-@torch.no_grad()
-def gen_quality(n_samples=8, steps=gen_steps):
-    # loss-agnostic quality: generative perplexity under GPT-2 (our samples are GPT-2
-    # tokens already) plus distinct-2 diversity to catch degenerate low-ppl output.
-    global _gpt2
-    if _gpt2 is None:
-        import importlib.util  # hide the (broken) torchvision from transformers' lazy loader
-        _orig = importlib.util.find_spec
-        importlib.util.find_spec = lambda n, *a, **k: None if str(n).split('.')[0] == 'torchvision' else _orig(n, *a, **k)
-        from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel
-        _gpt2 = GPT2LMHeadModel.from_pretrained('gpt2').to(device).eval()
-    model.eval()
-    x = torch.cat([model.generate(n_samples=16, steps=steps)
-                   for _ in range((n_samples + 15) // 16)], 0)[:n_samples]
-    model.train()
-    nll, ntok = 0.0, 0
-    for i in range(0, n_samples, 8):
-        ids = x[i:i + 8]
-        logits = _gpt2(ids).logits[:, :-1]
-        tgt = ids[:, 1:]
-        nll += F.cross_entropy(logits.reshape(-1, logits.size(-1)), tgt.reshape(-1),
-                               reduction='sum').item()
-        ntok += tgt.numel()
-    ppl = math.exp(nll / ntok)
-    bg, tot = set(), 0
-    for r in x.tolist():
-        for j in range(len(r) - 1):
-            bg.add((r[j], r[j + 1])); tot += 1
-    return ppl, len(bg) / max(1, tot), x
-
-
-CKPT = 'ckpt_mdlm.pt'          # latest (for resume across kills)
-BEST = 'ckpt_mdlm_best.pt'     # best-val model so far
-checkpoint_interval = 1000
-
-def save_ckpt(path, epoch, best_val):
-    tmp = path + '.tmp'
+def save_ckpt(epoch):
+    tmp = CKPT + '.tmp'
     torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(),
-                'epoch': epoch, 'lossi': lossi, 'best_val': best_val}, tmp)
-    os.replace(tmp, path)
+                'epoch': epoch, 'lossi': lossi}, tmp)
+    os.replace(tmp, CKPT)  # atomic: a kill mid-save can't corrupt the good checkpoint
 
-start_epoch, best_val = 0, float('inf')
+start_epoch = 0
 if os.path.exists(CKPT):
     ck = torch.load(CKPT, map_location=device)
-    model.load_state_dict(ck['model']); optimizer.load_state_dict(ck['opt'])
-    start_epoch, lossi, best_val = ck['epoch'] + 1, ck['lossi'], ck['best_val']
-    print(f"resumed from {CKPT} at step {start_epoch} (best val {best_val:.2f})")
+    model.load_state_dict(ck['model'])
+    optimizer.load_state_dict(ck['opt'])
+    start_epoch = ck['epoch'] + 1
+    lossi = ck['lossi']
+    print(f"resumed from {CKPT} at step {start_epoch}")
 
 
-# full training loop
+# training loop
 train_start = time.perf_counter()
-last_save = train_start
 timers = {'data': 0.0, 'loss': 0.0, 'backward': 0.0, 'step': 0.0}
 n_timed = 0
 
@@ -360,14 +341,8 @@ for epoch in range(start_epoch, epochs):
     if epoch % eval_interval == 0:
         te = time.perf_counter()
         losses = estimate_loss()
-        val = float(losses['val'])
-        lossi.append(val)
+        lossi.append(losses['val'])
         sync()
-        best_tag = ""
-        if val < best_val:                       # save whenever it beats every prior eval
-            best_val = val
-            save_ckpt(BEST, epoch, best_val)
-            best_tag = "  *BEST*"
         eval_dt = time.perf_counter() - te
         if n_timed:
             per = {k: 1000 * v / n_timed for k, v in timers.items()}
@@ -379,8 +354,8 @@ for epoch in range(start_epoch, epochs):
             timers = {k: 0.0 for k in timers}
             n_timed = 0
         mem = f" | gpu {torch.cuda.max_memory_allocated()/1e9:.2f}GB" if device == 'cuda' else ""
-        print(f"Step {epoch}/{epochs} : train {losses['train']:.4f} | val {val:.4f} "
-              f"| lr {cur_lr:.2e} | eval {eval_dt:.2f}s{mem}{best_tag}")
+        print(f"Step {epoch}/{epochs} : train {losses['train']:.4f} | val {losses['val']:.4f} "
+              f"| lr {cur_lr:.2e} | eval {eval_dt:.2f}s{mem}")
 
     sync(); t_a = time.perf_counter()
     x0 = get_batch('train')
@@ -406,24 +381,25 @@ for epoch in range(start_epoch, epochs):
     timers['step'] += t_e - t_d
     n_timed += 1
 
-    if time.perf_counter() - last_save > 60:     # latest checkpoint for kill-safe resume
-        save_ckpt(CKPT, epoch, best_val)
-        last_save = time.perf_counter()
+    if epoch % checkpoint_interval == 0 and epoch > start_epoch:
+        save_ckpt(epoch)
 
-save_ckpt(CKPT, epochs - 1, best_val)
-losses = estimate_loss(); val = float(losses['val']); lossi.append(val)
-if val < best_val:
-    best_val = val; save_ckpt(BEST, epochs - 1, best_val)
+save_ckpt(epochs - 1)
 stamp("training done", train_start)
 
-# final quality report on the just-trained model
+# final eval at end of budget so the last logged val reflects end-of-training
+losses = estimate_loss()
+lossi.append(losses['val'])
+mem = f" | gpu {torch.cuda.max_memory_allocated()/1e9:.2f}GB" if device == 'cuda' else ""
+print(f"Step {epoch}/{epochs} : train {losses['train']:.4f} | val {losses['val']:.4f} "
+      f"| lr {lr_at(epoch):.2e} | eval --{mem}")
+
+# Generate samples
 tg = time.perf_counter()
-ppl, distinct2, samples = gen_quality()
-stamp("quality eval", tg)
-print(f"FINAL @ step {epoch} : val {val:.1f} | best_val {best_val:.1f} | "
-      f"gen_ppl {ppl:.2f} | distinct2 {distinct2:.3f}")
+sample = model.generate(n_samples=1, steps=gen_steps)
+stamp(f"generation ({gen_steps} steps)", tg)
 print("\n--- sample ---")
-print(decode(samples[0].tolist()))
+print(decode(sample[0].tolist()))
 
 plt.plot([l.item() if torch.is_tensor(l) else l for l in lossi])
 plt.savefig('loss.png')

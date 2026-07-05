@@ -1,8 +1,7 @@
 *.pt
 *.bin
+__pycache__/
 .vscode/
 .claude/
 .env
 run.log
-results.tsv
-results_v2.tsv

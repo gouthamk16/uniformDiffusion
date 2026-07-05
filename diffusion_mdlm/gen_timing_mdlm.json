@@ -1,0 +1,214 @@
+{
+  "config": {
+    "n_samples": 1,
+    "denoising_steps": 256,
+    "block_size": 128,
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "checkpoint_step": 99999,
+    "model_param_mem_mb": 308.9
+  },
+  "note": "MDLM absorbing diffusion: no prompt/KV-cache. Generation is `denoising_steps` full-sequence bidirectional forward passes over a progressively unmasked sequence. 'prefill' = first denoising step, 'decode' = remaining steps.",
+  "cold_start_total_ms": 5303.1076999614015,
+  "n_runs": 20,
+  "summary": {
+    "prefill_ms": {
+      "mean": 19.460149994120002,
+      "std": 3.699127334976728,
+      "min": 14.293599990196526,
+      "max": 26.398900023195893
+    },
+    "decode_ms": {
+      "mean": 4273.702045000391,
+      "std": 138.0917808171583,
+      "min": 4011.2637999700382,
+      "max": 4562.24729999667
+    },
+    "decode_per_step_ms": {
+      "mean": 16.75961586274663,
+      "std": 0.5415363953614047,
+      "min": 15.730446274392307,
+      "max": 17.891165882339884
+    },
+    "total_ms": {
+      "mean": 4293.162194994511,
+      "std": 138.32412653710415,
+      "min": 4033.74129999429,
+      "max": 4588.646200019866
+    },
+    "peak_mem_alloc_mb": {
+      "mean": 1330.068992,
+      "std": 0.0,
+      "min": 1330.068992,
+      "max": 1330.068992
+    },
+    "peak_mem_reserved_mb": {
+      "mean": 1379.926016,
+      "std": 0.0,
+      "min": 1379.926016,
+      "max": 1379.926016
+    }
+  },
+  "runs": [
+    {
+      "prefill_ms": 17.11819996125996,
+      "decode_ms": 4190.7910000300035,
+      "total_ms": 4207.909199991263,
+      "decode_per_step_ms": 16.434474509921582,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 23.867499956395477,
+      "decode_ms": 4275.793300010264,
+      "total_ms": 4299.660799966659,
+      "decode_per_step_ms": 16.76781686278535,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 14.56859998870641,
+      "decode_ms": 4180.227199976798,
+      "total_ms": 4194.795799965505,
+      "decode_per_step_ms": 16.39304784304627,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 25.602499954402447,
+      "decode_ms": 4232.812999980524,
+      "total_ms": 4258.415499934927,
+      "decode_per_step_ms": 16.599266666590292,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 19.497300032526255,
+      "decode_ms": 4175.795099989045,
+      "total_ms": 4195.292400021572,
+      "decode_per_step_ms": 16.37566705878057,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 18.169699993450195,
+      "decode_ms": 4549.331299960613,
+      "total_ms": 4567.500999954063,
+      "decode_per_step_ms": 17.840514901806326,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 22.237099998164922,
+      "decode_ms": 4399.146899988409,
+      "total_ms": 4421.383999986574,
+      "decode_per_step_ms": 17.25155647054278,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 14.293599990196526,
+      "decode_ms": 4186.637100006919,
+      "total_ms": 4200.930699997116,
+      "decode_per_step_ms": 16.41818470590949,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 16.708699986338615,
+      "decode_ms": 4182.671000016853,
+      "total_ms": 4199.379700003192,
+      "decode_per_step_ms": 16.40263137261511,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 20.759399980306625,
+      "decode_ms": 4259.676899993792,
+      "total_ms": 4280.436299974099,
+      "decode_per_step_ms": 16.7046152940933,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 15.260999964084476,
+      "decode_ms": 4454.561299993657,
+      "total_ms": 4469.822299957741,
+      "decode_per_step_ms": 17.468867843112378,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 20.598399976734072,
+      "decode_ms": 4238.586599996779,
+      "total_ms": 4259.184999973513,
+      "decode_per_step_ms": 16.621908235281488,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 24.547600012738258,
+      "decode_ms": 4167.342700005975,
+      "total_ms": 4191.890300018713,
+      "decode_per_step_ms": 16.342520392180294,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 15.723499993328005,
+      "decode_ms": 4215.99439997226,
+      "total_ms": 4231.717899965588,
+      "decode_per_step_ms": 16.533311372440235,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 14.571800013072789,
+      "decode_ms": 4390.552400029264,
+      "total_ms": 4405.124200042337,
+      "decode_per_step_ms": 17.21785254913437,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 19.148799998220056,
+      "decode_ms": 4127.749800041784,
+      "total_ms": 4146.898600040004,
+      "decode_per_step_ms": 16.187254117810916,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 18.13510002102703,
+      "decode_ms": 4376.416900020558,
+      "total_ms": 4394.552000041585,
+      "decode_per_step_ms": 17.162419215766896,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 22.47750002425164,
+      "decode_ms": 4011.2637999700382,
+      "total_ms": 4033.74129999429,
+      "decode_per_step_ms": 15.730446274392307,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 26.398900023195893,
+      "decode_ms": 4562.24729999667,
+      "total_ms": 4588.646200019866,
+      "decode_per_step_ms": 17.891165882339884,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    },
+    {
+      "prefill_ms": 19.517800014000386,
+      "decode_ms": 4296.442900027614,
+      "total_ms": 4315.9607000416145,
+      "decode_per_step_ms": 16.8487956863828,
+      "peak_mem_alloc_mb": 1330.068992,
+      "peak_mem_reserved_mb": 1379.926016
+    }
+  ]
+}

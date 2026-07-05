@@ -1,19 +1,15 @@
-import math, torch, tiktoken
+import sys, math, torch, tiktoken
 import torch.nn as nn
 import torch.nn.functional as F
 
+sys.stdout.reconfigure(encoding='utf-8')
 enc = tiktoken.get_encoding("gpt2")
 vocab_size = enc.n_vocab
-decode = lambda l: enc.decode(l)
+mask_id = vocab_size
+decode = lambda l: enc.decode([t for t in l if t < vocab_size])
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 block_size, n_embed, n_layers, n_heads, drop_rate = 128, 512, 6, 16, 0.0
-lam_min, lam_max = 1e-3, 8.0
-log_ratio = torch.log(torch.tensor(lam_max / lam_min))
-
-def noise(t):
-    lam = lam_min * (lam_max / lam_min) ** t
-    return lam, lam * log_ratio.to(t.device)
 
 def timestep_embedding(t, dim, max_period=10000):
     half = dim // 2
@@ -25,6 +21,11 @@ def apply_rope(x, cos, sin):
     hd = x.shape[-1]
     x1, x2 = x[..., :hd // 2], x[..., hd // 2:]
     return torch.cat([x1 * cos - x2 * sin, x2 * cos + x1 * sin], dim=-1)
+
+def topk_sample(logits, k=20):
+    v = logits.topk(min(k, logits.size(-1)), dim=-1).values
+    logits = logits.masked_fill(logits < v[..., -1:], float('-inf'))
+    return torch.multinomial(F.softmax(logits, -1).view(-1, vocab_size), 1).view(logits.shape[:-1])
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads):
@@ -50,7 +51,7 @@ class MultiHeadAttention(nn.Module):
         v = v.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
         cos, sin = self.rope_cos[:T][None, None], self.rope_sin[:T][None, None]
         q, k = apply_rope(q, cos, sin), apply_rope(k, cos, sin)
-        out = F.scaled_dot_product_attention(q, k, v, dropout_p=drop_rate if self.training else 0.0)
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=0.0)
         out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.dropout(self.proj(out))
 
@@ -80,7 +81,7 @@ class Block(nn.Module):
 class BLM(nn.Module):
     def __init__(self):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
+        self.token_embedding_table = nn.Embedding(vocab_size + 1, n_embed)  # +1 for [MASK]
         self.blocks = nn.ModuleList([Block(n_embed, num_heads=n_heads) for _ in range(n_layers)])
         self.ln = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size)
@@ -94,27 +95,27 @@ class BLM(nn.Module):
 
     @torch.no_grad()
     def generate(self, n_samples, steps=128):
-        N = vocab_size
-        x = torch.randint(N, (n_samples, block_size), device=device)
+        # MDLM reverse process: start all [MASK], progressively unmask to predicted tokens.
+        x = torch.full((n_samples, block_size), mask_id, device=device)
         ts = torch.linspace(1.0, 0.0, steps + 1, device=device)
         for i in range(steps):
             t = ts[i].expand(n_samples)
-            dt = ts[i] - ts[i + 1]
-            _, sigma = noise(t)
-            s = torch.exp(self(x, t).clamp(max=20))
-            rate = sigma[:, None, None] / N * s
-            rate.scatter_(-1, x[..., None], 0.0)
-            probs = (rate * dt).clamp(0, 1)
-            stay = (1 - probs.sum(-1, keepdim=True)).clamp_min(0)
-            probs.scatter_(-1, x[..., None], stay)
-            x = torch.multinomial(probs.view(-1, N), 1).view(n_samples, block_size)
+            x0_hat = topk_sample(self(x, t))
+            is_mask = x == mask_id
+            unmask_p = (ts[i] - ts[i + 1]) / ts[i].clamp_min(1e-6)
+            do = is_mask & (torch.rand(x.shape, device=device) < unmask_p)
+            x = torch.where(do, x0_hat, x)
+        is_mask = x == mask_id
+        if is_mask.any():
+            x0_hat = topk_sample(self(x, ts[-1].expand(n_samples)))
+            x = torch.where(is_mask, x0_hat, x)
         return x
 
 torch.manual_seed(0)
 model = BLM().to(device)
-ck = torch.load('ckpt_full.pt', map_location=device, weights_only=False)
-missing, unexpected = model.load_state_dict(ck['model'], strict=False)
-print(f"loaded ckpt @ step {ck['epoch']} | missing={missing} unexpected={unexpected}")
+ck = torch.load('ckpt_mdlm_best.pt', map_location=device, weights_only=False)
+model.load_state_dict(ck['model'])
+print(f"loaded ckpt @ step {ck['epoch']} | best_val {ck['best_val']:.2f}")
 model.eval()
 
 for steps in (128, 256):
