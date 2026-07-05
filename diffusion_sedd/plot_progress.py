@@ -10,8 +10,8 @@ for i, r in enumerate(rows, 1):
     val, status, desc = float(r[1]), r[3], r[4]
     valid = 0 < val < 1e9          # drop the crash (0) and the diverged run (3.5e11)
     if status == 'keep':
-        best = min(best, val)
         if valid:
+            best = min(best, val)
             keep_x.append(i); keep_y.append(val)
         if 'RoPE replaces' in desc:
             rope_x = i

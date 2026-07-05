@@ -11,7 +11,7 @@ To set up a new experiment, work with the user to:
 3. **Read the in-scope files**: The repo is small. Read these files for full context:
    - `README.md` — repository context.
    - `prepare.py` — fixed constants, data prep, tokenizer, dataloader, evaluation. Do not modify.
-   - `ton-v1.py` — the file you modify. Model architecture, optimizer, training loop.
+   - `diffusion_sedd/ton-v1-sedd.py` or `diffusion_mdlm/ton-v1-mdlm.py` — the file you modify (pick the experiment folder for the run in question). Model architecture, optimizer, training loop.
 4. **Verify data exists**: Check that `~/.cache/autoresearch/` contains data shards and a tokenizer. If not, tell the human to run `uv run prepare.py`.
 5. **Initialize results.tsv**: Create `results.tsv` with just the header row. The baseline will be recorded after the first run.
 6. **Confirm and go**: Confirm setup looks good.
@@ -20,10 +20,10 @@ Once you get confirmation, kick off the experimentation.
 
 ## Experimentation
 
-Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it simply as: `uv run ton-v1.py`.
+Each experiment runs on a single GPU. The training script runs for a **fixed time budget of 5 minutes** (wall clock training time, excluding startup/compilation). You launch it from inside the experiment folder, e.g.: `cd diffusion_mdlm && uv run ton-v1-mdlm.py`.
 
 **What you CAN do:**
-- Modify `ton-v1.py` — this is the only file you edit. Everything is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, model size, etc.
+- Modify the experiment's training script (`ton-v1-sedd.py` or `ton-v1-mdlm.py`) — this is the only file you edit. Everything is fair game: model architecture, optimizer, hyperparameters, training loop, batch size, model size, etc.
 
 **What you CANNOT do:**
 - Install new packages or add dependencies. You can only use what's already in `pyproject.toml`.
@@ -86,9 +86,9 @@ The experiment runs on a dedicated branch (e.g. `autoresearch/mar5` or `autorese
 LOOP FOREVER:
 
 1. Look at the git state: the current branch/commit we're on
-2. Tune `ton-v1.py` with an experimental idea by directly hacking the code.
+2. Tune the experiment's training script (`ton-v1-sedd.py` or `ton-v1-mdlm.py`) with an experimental idea by directly hacking the code.
 3. git commit
-4. Run the experiment: `conda activate; python ton-v1.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
+4. Run the experiment from inside its folder: `conda activate; python ton-v1-mdlm.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
 5. Read out the results: `grep " | val " run.log | tail -1` (final val loss + gpu mem)
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
 7. Record the results in the tsv (NOTE: do not commit the results.tsv file, leave it untracked by git)

@@ -21,7 +21,8 @@ vocab_size = enc.n_vocab
 decode = lambda l: enc.decode(l)
 
 # Data: karpathy/tinystories-gpt4-clean, tokenized once and cached to disk.
-CACHE = '../tinystories_gpt2_full.bin'  # full dataset, no token cap (shared, one dir up)
+# Path is relative to this file (not cwd) so the script works from any working directory.
+CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tinystories_gpt2_full.bin')
 
 def build_cache():
     # stream the whole dataset to disk (low memory); atomic rename so a killed
@@ -402,5 +403,5 @@ print("\n--- sample ---")
 print(decode(sample[0].tolist()))
 
 plt.plot([l.item() if torch.is_tensor(l) else l for l in lossi])
-plt.savefig('loss.png')
+plt.savefig('loss_sedd.png')
 stamp("total", script_start)

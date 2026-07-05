@@ -22,7 +22,8 @@ mask_id = vocab_size          # MDLM absorbing [MASK] token (extra embedding row
 decode = lambda l: enc.decode([t for t in l if t < vocab_size])
 
 # Data: karpathy/tinystories-gpt4-clean, tokenized once and cached to disk.
-CACHE = '../tinystories_gpt2_full.bin'  # full dataset, no token cap (shared, one dir up)
+# Path is relative to this file (not cwd) so the script works from any working directory.
+CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tinystories_gpt2_full.bin')
 
 def build_cache():
     # stream the whole dataset to disk (low memory); atomic rename so a killed
@@ -96,7 +97,6 @@ lr = 3e-3
 min_lr = 3e-5
 warmup_steps = 100
 gen_steps = 256
-train_budget_s = int(os.environ.get('BUDGET', 600))  # 10-min autoresearch budget (fresh run)
 
 
 def lr_at(step):
@@ -306,6 +306,7 @@ def gen_quality(n_samples=8, steps=gen_steps):
         _orig = importlib.util.find_spec
         importlib.util.find_spec = lambda n, *a, **k: None if str(n).split('.')[0] == 'torchvision' else _orig(n, *a, **k)
         from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel
+        importlib.util.find_spec = _orig  # restore: only transformers' import needed the patch
         _gpt2 = GPT2LMHeadModel.from_pretrained('gpt2').to(device).eval()
     model.eval()
     x = torch.cat([model.generate(n_samples=16, steps=steps)
@@ -329,7 +330,6 @@ def gen_quality(n_samples=8, steps=gen_steps):
 
 CKPT = 'ckpt_mdlm.pt'          # latest (for resume across kills)
 BEST = 'ckpt_mdlm_best.pt'     # best-val model so far
-checkpoint_interval = 1000
 
 def save_ckpt(path, epoch, best_val):
     tmp = path + '.tmp'
@@ -420,11 +420,11 @@ stamp("training done", train_start)
 tg = time.perf_counter()
 ppl, distinct2, samples = gen_quality()
 stamp("quality eval", tg)
-print(f"FINAL @ step {epoch} : val {val:.1f} | best_val {best_val:.1f} | "
+print(f"FINAL @ step {epochs - 1} : val {val:.1f} | best_val {best_val:.1f} | "
       f"gen_ppl {ppl:.2f} | distinct2 {distinct2:.3f}")
 print("\n--- sample ---")
 print(decode(samples[0].tolist()))
 
 plt.plot([l.item() if torch.is_tensor(l) else l for l in lossi])
-plt.savefig('loss.png')
+plt.savefig('loss_mdlm.png')
 stamp("total", script_start)

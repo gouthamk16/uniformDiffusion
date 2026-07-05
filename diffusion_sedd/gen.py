@@ -114,8 +114,8 @@ class BLM(nn.Module):
 torch.manual_seed(0)
 model = BLM().to(device)
 ck = torch.load('ckpt_full.pt', map_location=device, weights_only=False)
-missing, unexpected = model.load_state_dict(ck['model'], strict=False)
-print(f"loaded ckpt @ step {ck['epoch']} | missing={missing} unexpected={unexpected}")
+model.load_state_dict(ck['model'])
+print(f"loaded ckpt @ step {ck['epoch']}")
 model.eval()
 
 for steps in (128, 256):
