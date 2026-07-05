@@ -1,5 +1,7 @@
 *.pt
 *.bin
+__pycache__/
 .vscode/
 .claude/
 .env
+run.log

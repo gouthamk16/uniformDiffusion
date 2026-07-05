@@ -1,0 +1,13 @@
+commit	val_loss	gen_ppl	distinct2	memory_gb	status	description
+cf88c23	178698.0	350.53	0.695	3.8	keep	baseline (tuned SEDD-uniform arch, 10min)
+2ca21f7	411.5	221.70	0.854	3.0	keep	MDLM masked/absorbing diffusion (gen_ppl 350->222, +diversity; new baseline)
+4205191	435.1	232.50	0.847	3.4	discard	MDLM 12 layers (worse; step-bound, 6 optimal)
+5e5ae97	394.7	188.56	0.828	3.0	keep	MDLM LR 2e-3 (better than 1e-3; new baseline)
+59dd400	397.2	186.24	0.844	3.0	keep	MDLM LR 3e-3 (marginally better than 2e-3)
+8ba7364	398.6	199.78	0.834	3.3	discard	MDLM LR 4e-3 (worse; ~3e-3 optimal)
+7bfb2b2	399.3	115.13	0.764	3.3	keep	MDLM gen_steps 256 (much better sampling; 186->115)
+3de48d6	395.2	137.30	0.803	3.3	discard	MDLM gen_steps 512 (worse than 256; 256 sweet spot)
+5d9ab36	397.2	74.78	0.746	3.0	keep	MDLM top-k=50 sampling (115->75; near real-text fluency)
+e308248	405.4	42.56	0.663	3.0	keep	MDLM top-k=20 (75->43; real-text fluency, diversity still ok)
+77d1f01	405.4	41.76	0.603	3.0	discard	MDLM top-k=10 (ppl tied ~42 but diversity worse, repetitive; k=20 best)
+5dc5a70	401.5	50.42	0.642	2.9	discard	MDLM no time-cond (worse 50 vs 43; adaLN helps despite +steps)

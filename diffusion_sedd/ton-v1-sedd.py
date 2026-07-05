@@ -21,29 +21,35 @@ vocab_size = enc.n_vocab
 decode = lambda l: enc.decode(l)
 
 # Data: karpathy/tinystories-gpt4-clean, tokenized once and cached to disk.
-CACHE = 'tinystories_gpt2.bin'
-MAX_TOKENS = 100_000_000
+# Path is relative to this file (not cwd) so the script works from any working directory.
+CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tinystories_gpt2_full.bin')
 
 def build_cache():
+    # stream the whole dataset to disk (low memory); atomic rename so a killed
+    # build never leaves a partial cache that looks complete.
     from datasets import load_dataset
     t0 = time.perf_counter()
     ds = load_dataset('karpathy/tinystories-gpt4-clean', split='train', streaming=True)
     eot = enc.eot_token
-    chunks, total, batch = [], 0, []
-    for ex in ds:
-        batch.append(ex['text'])
-        if len(batch) == 1024:
-            for ids in enc.encode_ordinary_batch(batch):
+    tmp, total, report, batch = CACHE + '.tmp', 0, 50_000_000, []
+    with open(tmp, 'wb') as f:
+        def flush(texts):
+            nonlocal total
+            for ids in enc.encode_ordinary_batch(texts):
                 ids.append(eot)
-                chunks.append(np.array(ids, dtype=np.uint16))
+                np.array(ids, dtype=np.uint16).tofile(f)
                 total += len(ids)
-            batch = []
-            if total >= MAX_TOKENS:
-                break
-    arr = np.concatenate(chunks)
-    arr.tofile(CACHE)
-    stamp(f"tokenized {len(arr):,} tokens -> {CACHE}", t0)
-    return arr
+        for ex in ds:
+            batch.append(ex['text'])
+            if len(batch) == 1024:
+                flush(batch); batch = []
+                if total >= report:
+                    stamp(f"  tokenized {total:,} tokens...", t0); report += 50_000_000
+        if batch:
+            flush(batch)
+    os.replace(tmp, CACHE)
+    stamp(f"tokenized {total:,} tokens -> {CACHE}", t0)
+    return np.fromfile(CACHE, dtype=np.uint16)
 
 t0 = time.perf_counter()
 if os.path.exists(CACHE):
@@ -65,6 +71,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 torch.manual_seed(1337)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f"device: {device}" + (f" ({torch.cuda.get_device_name(0)})" if device == 'cuda' else ""))
 
@@ -78,18 +86,18 @@ def sync():
 batch_size = 16
 block_size = 128
 n_embed = 512
-n_layers = 8
-n_heads = 8
-drop_rate = 0.2
-epochs = 20000
+n_layers = 6
+n_heads = 16
+drop_rate = 0.0
+epochs = 100000
 eval_interval = 1000
-checkpoint_interval = 1000
-eval_iters = 100
-lr = 3e-4           
-min_lr = 3e-5        
-warmup_steps = 300
+eval_iters = 40
+lr = 1e-3
+min_lr = 3e-5
+warmup_steps = 100
 gen_steps = 128
-CKPT = 'ckpt.pt'
+checkpoint_interval = 1000
+CKPT = 'ckpt_full.pt'
 
 
 def lr_at(step):
@@ -125,6 +133,8 @@ def corrupt(x0, t):
 
 def dwdse_loss(model, x0, t):
     # Diffusion-weighted denoising score entropy (uniform graph). x0:(B,T), t:(B,)
+    # R takes only two values per position (a/denom at x0, b/denom elsewhere), so the
+    # per-position sum over the vocab has a closed form: avoids materializing (B,T,N) R/K.
     lam, dlam = noise(t)
     beta = torch.exp(-lam)
     a = beta + (1 - beta) / vocab_size  # stay prob
@@ -134,48 +144,66 @@ def dwdse_loss(model, x0, t):
     log_s = model(xt, t).clamp(max=20)  # log of ratios s_theta
     s = torch.exp(log_s)                # (B, T, N)
 
-    # target ratio R[b,i,y] = p(y|x0)/p(xt|x0); 'a/denom' at true token, 'b/denom' elsewhere
     denom = torch.where(xt == x0, a[:, None], b[:, None])      # (B, T)
-    R = (b[:, None] / denom)[..., None].expand(-1, -1, vocab_size).clone()
-    R.scatter_(-1, x0[..., None], (a[:, None] / denom)[..., None])
+    ra = a[:, None] / denom            # ratio at the true token x0
+    rb = b[:, None] / denom            # ratio at every other token
+    Ka = ra * (ra.clamp_min(1e-9).log() - 1)
+    Kb = rb * (rb.clamp_min(1e-9).log() - 1)
 
-    K = R * (R.clamp_min(1e-9).log() - 1)
-    term = s - R * log_s + K                # Bregman score entropy per candidate y
-    term.scatter_(-1, xt[..., None], 0.0)   # drop y == xt (the current token)
-    return (dlam[:, None] * term.sum(-1)).mean()
+    ls_x0 = log_s.gather(-1, x0[..., None]).squeeze(-1)
+    ls_xt = log_s.gather(-1, xt[..., None]).squeeze(-1)
+    s_xt = s.gather(-1, xt[..., None]).squeeze(-1)
+
+    # full sum over y of (s - R*log_s + K)
+    full = s.sum(-1) - (rb * log_s.sum(-1) + (ra - rb) * ls_x0) + ((vocab_size - 1) * Kb + Ka)
+    # drop the y == xt term
+    is_xt_x0 = xt == x0
+    term_xt = s_xt - torch.where(is_xt_x0, ra, rb) * ls_xt + torch.where(is_xt_x0, Ka, Kb)
+    return (dlam[:, None] * (full - term_xt)).mean()
 
 
-# Attention block
-class Head(nn.Module):
+def timestep_embedding(t, dim, max_period=10000):
+    half = dim // 2
+    freqs = torch.exp(-math.log(max_period) * torch.arange(half, device=t.device) / half)
+    args = (t * 1000)[:, None] * freqs[None]
+    return torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
 
-    def __init__(self, head_size):
+
+def apply_rope(x, cos, sin):
+    # x: (B, nh, T, hd); rotate halves
+    hd = x.shape[-1]
+    x1, x2 = x[..., :hd // 2], x[..., hd // 2:]
+    return torch.cat([x1 * cos - x2 * sin, x2 * cos + x1 * sin], dim=-1)
+
+
+# Attention block: fused QKV + scaled_dot_product_attention (bidirectional)
+class MultiHeadAttention(nn.Module):
+
+    def __init__(self, num_heads):
         super().__init__()
-        self.key = nn.Linear(n_embed, head_size, bias=False)
-        self.query = nn.Linear(n_embed, head_size, bias=False)
-        self.value = nn.Linear(n_embed, head_size, bias=False)
+        self.n_heads = num_heads
+        head_dim = n_embed // num_heads
+        self.qkv = nn.Linear(n_embed, 3 * n_embed, bias=False)
+        self.proj = nn.Linear(n_embed, n_embed)
+        self.q_norm = nn.RMSNorm(head_dim)
+        self.k_norm = nn.RMSNorm(head_dim)
         self.dropout = nn.Dropout(drop_rate)
+        half = head_dim // 2
+        freqs = 1.0 / (1000 ** (torch.arange(half).float() / half))
+        ang = torch.outer(torch.arange(block_size).float(), freqs)
+        self.register_buffer('rope_cos', torch.cos(ang), persistent=False)
+        self.register_buffer('rope_sin', torch.sin(ang), persistent=False)
 
     def forward(self, x):
         B, T, C = x.shape
-        k = self.key(x)
-        q = self.query(x)
-        wei = q @ k.transpose(-2, -1) / (C ** 0.5)
-        # bidirectional: no causal mask
-        wei = F.softmax(wei, dim=-1)
-        wei = self.dropout(wei)
-        v = self.value(x)
-        return wei @ v
-
-class MultiHeadAttention(nn.Module):
-
-    def __init__(self, num_heads, head_size):
-        super().__init__()
-        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
-        self.proj = nn.Linear(n_embed, n_embed)
-        self.dropout = nn.Dropout(drop_rate)
-
-    def forward(self, x):
-        out = torch.cat([h(x) for h in self.heads], dim=-1)
+        q, k, v = self.qkv(x).split(n_embed, dim=2)
+        q = self.q_norm(q.view(B, T, self.n_heads, C // self.n_heads)).transpose(1, 2)
+        k = self.k_norm(k.view(B, T, self.n_heads, C // self.n_heads)).transpose(1, 2)
+        v = v.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
+        cos, sin = self.rope_cos[:T][None, None], self.rope_sin[:T][None, None]
+        q, k = apply_rope(q, cos, sin), apply_rope(k, cos, sin)
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=drop_rate if self.training else 0.0)
+        out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.dropout(self.proj(out))
 
 class FeedForward(nn.Module):
@@ -196,15 +224,18 @@ class Block(nn.Module):
 
     def __init__(self, n_embed, num_heads):
         super().__init__()
-        head_size = n_embed // num_heads
-        self.sa = MultiHeadAttention(num_heads, head_size)
+        self.sa = MultiHeadAttention(num_heads)
         self.ffwd = FeedForward(n_embed)
-        self.ln1 = nn.LayerNorm(n_embed)
-        self.ln2 = nn.LayerNorm(n_embed)
+        self.ln1 = nn.LayerNorm(n_embed, elementwise_affine=False)
+        self.ln2 = nn.LayerNorm(n_embed, elementwise_affine=False)
+        self.adaLN = nn.Linear(n_embed, 4 * n_embed)  # DiT-style time modulation (scale+shift)
+        nn.init.zeros_(self.adaLN.weight)
+        nn.init.zeros_(self.adaLN.bias)
 
-    def forward(self, x):
-        x = x + self.sa(self.ln1(x))
-        x = x + self.ffwd(self.ln2(x))
+    def forward(self, x, temb):
+        s1, c1, s2, c2 = self.adaLN(F.silu(temb))[:, None, :].chunk(4, dim=-1)
+        x = x + self.sa(self.ln1(x) * (1 + c1) + s1)
+        x = x + self.ffwd(self.ln2(x) * (1 + c2) + s2)
         return x
 
 
@@ -213,22 +244,20 @@ class BLM(nn.Module):
     def __init__(self):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
-        self.positional_embedding_table = nn.Embedding(block_size, n_embed)
-        self.blocks = nn.Sequential(*[Block(n_embed, num_heads=n_heads) for _ in range(n_layers)])
+        self.blocks = nn.ModuleList([Block(n_embed, num_heads=n_heads) for _ in range(n_layers)])
         self.ln = nn.LayerNorm(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size)
         self.time_mlp = nn.Sequential(
-            nn.Linear(1, n_embed),
+            nn.Linear(n_embed, n_embed),
             nn.SiLU(),
             nn.Linear(n_embed, n_embed),
         )
 
     def forward(self, idx, t):
-        token_embeddings = self.token_embedding_table(idx)
-        position_embeddings = self.positional_embedding_table(torch.arange(idx.shape[1], device=device))
-        time_embeddings = self.time_mlp(t[:, None])
-        x = token_embeddings + position_embeddings + time_embeddings[:, None, :]
-        x = self.blocks(x)
+        temb = self.time_mlp(timestep_embedding(t, n_embed))
+        x = self.token_embedding_table(idx)
+        for block in self.blocks:
+            x = block(x, temb)
         x = self.ln(x)
         return self.lm_head(x)  # log of ratios s_theta, (B, T, vocab_size)
 
@@ -255,13 +284,18 @@ class BLM(nn.Module):
 t0 = time.perf_counter()
 model = BLM().to(device)
 n_params = sum(p.numel() for p in model.parameters())
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+optimizer = torch.optim.Adam(model.parameters(), lr=lr, fused=True)
 lossi = []
 stamp(f"model built ({n_params/1e6:.1f}M params)", t0)
 
 
 @torch.no_grad()
 def estimate_loss():
+    # fixed-seed eval: identical (batch, t, corruption) draws every call, so val
+    # depends only on weights and is comparable across runs. RNG state restored after.
+    cpu_state = torch.get_rng_state()
+    cuda_state = torch.cuda.get_rng_state() if device == 'cuda' else None
+    torch.manual_seed(1234)
     out = {}
     model.eval()
     for split in ['train', 'val']:
@@ -272,8 +306,17 @@ def estimate_loss():
             losses[k] = dwdse_loss(model, x0, t).item()
         out[split] = losses.mean()
     model.train()
+    torch.set_rng_state(cpu_state)
+    if cuda_state is not None:
+        torch.cuda.set_rng_state(cuda_state)
     return out
 
+
+def save_ckpt(epoch):
+    tmp = CKPT + '.tmp'
+    torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(),
+                'epoch': epoch, 'lossi': lossi}, tmp)
+    os.replace(tmp, CKPT)  # atomic: a kill mid-save can't corrupt the good checkpoint
 
 start_epoch = 0
 if os.path.exists(CKPT):
@@ -282,12 +325,7 @@ if os.path.exists(CKPT):
     optimizer.load_state_dict(ck['opt'])
     start_epoch = ck['epoch'] + 1
     lossi = ck['lossi']
-    print(f"resumed from {CKPT} at epoch {start_epoch}")
-
-
-def save_ckpt(epoch):
-    torch.save({'model': model.state_dict(), 'opt': optimizer.state_dict(),
-                'epoch': epoch, 'lossi': lossi}, CKPT)
+    print(f"resumed from {CKPT} at step {start_epoch}")
 
 
 # training loop
@@ -322,10 +360,12 @@ for epoch in range(start_epoch, epochs):
 
     sync(); t_a = time.perf_counter()
     x0 = get_batch('train')
-    t = torch.rand(x0.shape[0], device=device)
+    B = x0.shape[0]
+    t = (torch.arange(B, device=device) + torch.rand(B, device=device)) / B  # stratified
     sync(); t_b = time.perf_counter()
 
-    loss = dwdse_loss(model, x0, t)
+    with torch.autocast(device_type=device, dtype=torch.bfloat16):
+        loss = dwdse_loss(model, x0, t)
     sync(); t_c = time.perf_counter()
 
     optimizer.zero_grad(set_to_none=True)
@@ -343,12 +383,17 @@ for epoch in range(start_epoch, epochs):
     n_timed += 1
 
     if epoch % checkpoint_interval == 0 and epoch > start_epoch:
-        tc = time.perf_counter()
         save_ckpt(epoch)
-        stamp(f"checkpoint @ epoch {epoch}", tc)
 
 save_ckpt(epochs - 1)
 stamp("training done", train_start)
+
+# final eval at end of budget so the last logged val reflects end-of-training
+losses = estimate_loss()
+lossi.append(losses['val'])
+mem = f" | gpu {torch.cuda.max_memory_allocated()/1e9:.2f}GB" if device == 'cuda' else ""
+print(f"Step {epoch}/{epochs} : train {losses['train']:.4f} | val {losses['val']:.4f} "
+      f"| lr {lr_at(epoch):.2e} | eval --{mem}")
 
 # Generate samples
 tg = time.perf_counter()
@@ -358,5 +403,5 @@ print("\n--- sample ---")
 print(decode(sample[0].tolist()))
 
 plt.plot([l.item() if torch.is_tensor(l) else l for l in lossi])
-plt.savefig('loss.png')
+plt.savefig('loss_sedd.png')
 stamp("total", script_start)
